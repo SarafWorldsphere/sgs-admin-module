@@ -20,26 +20,14 @@ function normalizePhone(phone) {
 
 function isValidEmail(email) {
   if (!email) return false;
-  // Same pattern as lib/validators.js — the domain must end in a top-level
-  // domain of two letters or more. The form already rejects "kishore@gmail.c"
-  // client-side; this stops it reaching the database through a direct call.
-  return /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(String(email).trim());
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim());
 }
 
-/**
- * ✅ Gmail-only rule — matches DB CHECK constraints:
- *   chk_student_email, chk_guardian_email
- * Returns true if value is null/empty (nullable column) OR ends @gmail.com.
- */
 function isGmailEmail(email) {
   if (!email || !String(email).trim()) return true;
   return /^[^\s@]+@gmail\.com$/i.test(String(email).trim());
 }
 
-/**
- * Convert a Postgres error to a user-friendly message.
- * Never leak raw error.message to the client.
- */
 function friendlyDbError(error) {
   const msg = String(error?.message || '');
   const code = error?.code;
@@ -62,7 +50,6 @@ function friendlyDbError(error) {
     return 'A referenced record does not exist.';
   }
 
-  // Fallback
   return 'Something went wrong while saving. Please try again or contact support.';
 }
 
@@ -85,88 +72,20 @@ function buildParentsFromPayload(body) {
   return list;
 }
 
-/**
- * Link a student to the parents in the payload, updating the records already
- * attached to that student rather than creating new ones.
- *
- * This used to upsert on email alone. Because the conflict target was the
- * email, correcting a parent's address inserted a *new* parent row, repointed
- * the student at it and left the old record orphaned — one extra row per edit.
- * Production picked up three orphans this way before it was spotted.
- *
- * The rule now is: whichever parent already occupies this slot for this student
- * gets updated in place, email included. A slot is (relationship, position), so
- * parent1 and parent2 stay distinct even though both are 'parent'.
- */
 async function reconcileParents(tx, studentId, parents) {
-  // Who is already attached, in a stable order, so slot N of the payload lines
-  // up with slot N of the existing links.
-  const existing = await tx`
-    SELECT m.parent_id, m.relationship_type
-    FROM sgs_parent_student_map m
-    WHERE m.student_id = ${studentId}
-    ORDER BY m.relationship_type, m.parent_id
-  `;
-  const slots = {};
-  for (const row of existing) {
-    (slots[row.relationship_type] ||= []).push(row.parent_id);
-  }
-
   const parentRefs = [];
-  const used = {};
-
   for (const p of parents) {
-    const queue = slots[p.relationship] || [];
-    const pos = (used[p.relationship] ||= 0);
-    const heldId = queue[pos];
-    used[p.relationship] = pos + 1;
-
-    // Does another parent record already own this email? If so the address
-    // belongs to them — link to that record instead of taking the address,
-    // which would breach the unique constraint.
-    const owner = await tx`
-      SELECT parent_id FROM sgs_parent_master WHERE email = ${p.email} LIMIT 1
+    const rows = await tx`
+      INSERT INTO sgs_parent_master (full_name, email, phone, record_status, version_no)
+      VALUES (${p.name}, ${p.email}, ${p.phone}, 'Active', 1)
+      ON CONFLICT (email) DO UPDATE
+        SET full_name = EXCLUDED.full_name,
+            phone = COALESCE(EXCLUDED.phone, sgs_parent_master.phone),
+            updated_at = CURRENT_TIMESTAMP
+      RETURNING parent_id
     `;
-    const ownerId = owner.length > 0 ? owner[0].parent_id : null;
-
-    let parentId;
-
-    if (heldId && (ownerId === null || ownerId === heldId)) {
-      // Normal edit: update the record this student already points at.
-      const rows = await tx`
-        UPDATE sgs_parent_master
-        SET full_name = ${p.name},
-            email = ${p.email},
-            phone = COALESCE(${p.phone}, phone),
-            updated_at = CURRENT_TIMESTAMP
-        WHERE parent_id = ${heldId}
-        RETURNING parent_id
-      `;
-      parentId = rows.length > 0 ? rows[0].parent_id : null;
-    } else if (ownerId !== null) {
-      // The address belongs to an existing parent — a sibling's parent, say.
-      // Refresh their details and link this student to them.
-      const rows = await tx`
-        UPDATE sgs_parent_master
-        SET full_name = ${p.name},
-            phone = COALESCE(${p.phone}, phone),
-            updated_at = CURRENT_TIMESTAMP
-        WHERE parent_id = ${ownerId}
-        RETURNING parent_id
-      `;
-      parentId = rows.length > 0 ? rows[0].parent_id : ownerId;
-    } else {
-      // Genuinely new parent.
-      const rows = await tx`
-        INSERT INTO sgs_parent_master (full_name, email, phone, record_status, version_no)
-        VALUES (${p.name}, ${p.email}, ${p.phone}, 'Active', 1)
-        RETURNING parent_id
-      `;
-      parentId = rows.length > 0 ? rows[0].parent_id : null;
-    }
-
-    if (parentId) {
-      parentRefs.push({ parent_id: parentId, relationship: p.relationship });
+    if (rows.length > 0) {
+      parentRefs.push({ parent_id: rows[0].parent_id, relationship: p.relationship });
     }
   }
 
@@ -209,7 +128,7 @@ export async function GET() {
         s.parent2_name, s.parent2_phone, s.parent2_email,
         s.student_phone, s.student_email,
         s.guardian_name, s.guardian_phone, s.guardian_email,
-        s.record_status,
+        s.record_status, s.is_active,
         c.class_name
       FROM sgs_student_master s
       LEFT JOIN sgs_class_master c ON c.class_id = s.class_id
@@ -240,7 +159,6 @@ export async function POST(request) {
       guardian_name, guardian_phone, guardian_email,
     } = body;
 
-    // ---- Required fields ----
     if (!admission_no || !full_name || !class_id || !section) {
       return NextResponse.json(
         { error: 'Student ID, Name, Class and Section are required' },
@@ -248,44 +166,28 @@ export async function POST(request) {
       );
     }
 
-    // ---- Class existence ----
     const classCheck = await sql`
       SELECT class_id FROM sgs_class_master
       WHERE class_id = ${class_id} AND record_status = 'Active'
     `;
     if (classCheck.length === 0) {
-      return NextResponse.json(
-        { error: `Class ID ${class_id} does not exist.` },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: `Class ID ${class_id} does not exist.` }, { status: 400 });
     }
 
-    // ---- Duplicate admission_no ----
     const existing = await sql`
       SELECT admission_no FROM sgs_student_master WHERE admission_no = ${admission_no}
     `;
     if (existing.length > 0) {
-      return NextResponse.json(
-        { error: `Student ID ${admission_no} already exists. Please refresh the form to get a new ID.` },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: `Student ID ${admission_no} already exists. Please refresh the form to get a new ID.` }, { status: 400 });
     }
 
-    // ---- ✅ Gmail-only validation (student_email, guardian_email) ----
     if (student_email && !isGmailEmail(student_email)) {
-      return NextResponse.json(
-        { error: 'Student email must be a @gmail.com address.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Student email must be a @gmail.com address.' }, { status: 400 });
     }
     if (guardian_email && !isGmailEmail(guardian_email)) {
-      return NextResponse.json(
-        { error: 'Guardian email must be a @gmail.com address.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Guardian email must be a @gmail.com address.' }, { status: 400 });
     }
 
-    // ---- ✅ Duplicate student_email check (across Active + Inactive) ----
     if (student_email && String(student_email).trim()) {
       const dupe = await sql`
         SELECT admission_no, full_name
@@ -302,11 +204,10 @@ export async function POST(request) {
       }
     }
 
-    // ---- Parent payload ----
     const parents = buildParentsFromPayload(body);
 
-    // ---- Insert student + reconcile parents ----
     const result = await sql.begin(async (tx) => {
+      // ✅ FIX (Madhuri): is_active = true on insert so Faculty + Parent can see the student
       const studentRows = await tx`
         INSERT INTO sgs_student_master (
           admission_no, full_name, class_id, section, roll_no,
@@ -314,14 +215,14 @@ export async function POST(request) {
           parent2_name, parent2_phone, parent2_email,
           student_phone, student_email,
           guardian_name, guardian_phone, guardian_email,
-          record_status
+          record_status, is_active
         ) VALUES (
           ${admission_no}, ${full_name}, ${class_id}, ${section}, ${roll_no},
           ${parent1_name || null}, ${parent1_phone ? normalizePhone(parent1_phone) : null}, ${parent1_email || null},
           ${parent2_name || null}, ${parent2_phone ? normalizePhone(parent2_phone) : null}, ${parent2_email || null},
           ${student_phone ? normalizePhone(student_phone) : null}, ${student_email || null},
           ${guardian_name || null}, ${guardian_phone ? normalizePhone(guardian_phone) : null}, ${guardian_email || null},
-          'Active'
+          'Active', true
         ) RETURNING student_id, admission_no
       `;
 
@@ -337,10 +238,7 @@ export async function POST(request) {
     );
   } catch (error) {
     console.error('Error adding student:', error);
-    return NextResponse.json(
-      { error: friendlyDbError(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: friendlyDbError(error) }, { status: 500 });
   }
 }
 
@@ -357,12 +255,14 @@ export async function PUT(request) {
       return NextResponse.json({ error: 'Student ID is required' }, { status: 400 });
     }
 
-    // STATUS-ONLY TOGGLE
+    // STATUS-ONLY TOGGLE — keeps is_active and record_status in sync
     if (status !== undefined && !body.full_name) {
       const newStatus = status === 'Active' ? 'Active' : 'Inactive';
+      const newIsActive = newStatus === 'Active';
       const result = await sql`
         UPDATE sgs_student_master
-        SET record_status = ${newStatus}
+        SET record_status = ${newStatus},
+            is_active = ${newIsActive}
         WHERE admission_no = ${admission_no}
         RETURNING *
       `;
@@ -391,21 +291,13 @@ export async function PUT(request) {
       }
     }
 
-    // ---- ✅ Gmail-only validation ----
     if (student_email && !isGmailEmail(student_email)) {
-      return NextResponse.json(
-        { error: 'Student email must be a @gmail.com address.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Student email must be a @gmail.com address.' }, { status: 400 });
     }
     if (guardian_email && !isGmailEmail(guardian_email)) {
-      return NextResponse.json(
-        { error: 'Guardian email must be a @gmail.com address.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Guardian email must be a @gmail.com address.' }, { status: 400 });
     }
 
-    // ---- ✅ Duplicate student_email check (exclude self) ----
     if (student_email && String(student_email).trim()) {
       const dupe = await sql`
         SELECT admission_no, full_name
@@ -463,10 +355,7 @@ export async function PUT(request) {
     if (error.message === 'Student not found') {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
-    return NextResponse.json(
-      { error: friendlyDbError(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: friendlyDbError(error) }, { status: 500 });
   }
 }
 
@@ -479,8 +368,10 @@ export async function DELETE(request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
+    // ✅ Set both record_status='Deleted' AND is_active=false
     const result = await sql`
-      UPDATE sgs_student_master SET record_status = 'Deleted'
+      UPDATE sgs_student_master
+      SET record_status = 'Deleted', is_active = false
       WHERE admission_no = ${id} RETURNING *
     `;
     if (result.length === 0) {
@@ -489,9 +380,6 @@ export async function DELETE(request) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting student:', error);
-    return NextResponse.json(
-      { error: friendlyDbError(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: friendlyDbError(error) }, { status: 500 });
   }
 }
