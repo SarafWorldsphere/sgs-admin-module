@@ -3,13 +3,14 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Plus, Pencil, Trash2, Search, X,
+  Plus, Pencil, Trash2, Search, X, Eye, Download,
   Users, UserCheck, UserX, BookOpen
 } from 'lucide-react';
 import StudentFormWizard from '../../../components/StudentFormWizard';
 import ConfirmModal from '../../../components/ConfirmModal';
 import ModifyLookupModal from '../../../components/ModifyLookupModal';
 import AlertModal from '../../../components/AlertModal';
+import ViewModal from '../../../components/ViewModal';
 import { formatClassName } from '../../../lib/format-class-name';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
@@ -26,6 +27,9 @@ export default function StudentsPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [lookupOpen, setLookupOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
+  const [viewStudent, setViewStudent] = useState(null);
+  const [exportClass, setExportClass] = useState('all');
+  const [exporting, setExporting] = useState(false);
   const [alertState, setAlertState] = useState({ isOpen: false, title: '', message: '', variant: 'error' });
 
   const showAlert = (message, variant = 'error', title = 'Error') =>
@@ -183,6 +187,59 @@ export default function StudentsPage() {
     return true;
   };
 
+  // ✅ Phase 1 — Item 7: Export to Excel
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+
+      const source = exportClass === 'all'
+        ? filteredStudents
+        : filteredStudents.filter(s => String(s.class_name) === String(exportClass));
+
+      if (source.length === 0) {
+        showAlert('No students to export for the selected class.', 'warning', 'Nothing to Export');
+        setExporting(false);
+        return;
+      }
+
+      const rows = source.map((s) => ({
+        'Admission No': s.admission_no || '',
+        'Name': s.full_name || '',
+        'Class': s.class_name ? formatClassName(s.class_name) : '',
+        'Section': s.section || '',
+        'Roll No': s.roll_no || '',
+        'Student Phone': s.student_phone || '',
+        'Student Email': s.student_email || '',
+        'Parent 1 Name': s.parent1_name || '',
+        'Parent 1 Phone': s.parent1_phone || '',
+        'Parent 1 Email': s.parent1_email || '',
+        'Parent 2 Name': s.parent2_name || '',
+        'Parent 2 Phone': s.parent2_phone || '',
+        'Parent 2 Email': s.parent2_email || '',
+        'Guardian Name': s.guardian_name || '',
+        'Guardian Phone': s.guardian_phone || '',
+        'Guardian Email': s.guardian_email || '',
+        'Status': s.status || '',
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      const sheetName = exportClass === 'all' ? 'All Students' : `Class ${exportClass}`;
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+      const fileName = exportClass === 'all'
+        ? `students_all_${new Date().toISOString().split('T')[0]}.xlsx`
+        : `students_class_${exportClass}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } catch (error) {
+      console.error('Export error:', error);
+      showAlert('Could not generate the Excel file. Please try again.', 'error', 'Export Failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const filteredStudents = Array.isArray(students) ? students.filter(s => {
     const term = searchTerm.toLowerCase();
     if (searchType === 'name') return s.name?.toLowerCase().includes(term);
@@ -206,6 +263,47 @@ export default function StudentsPage() {
     active: Array.isArray(students) ? students.filter(s => s.status === 'Active').length : 0,
     inactive: Array.isArray(students) ? students.filter(s => s.status === 'Inactive').length : 0,
   };
+
+  // Build sections for the View modal
+  const buildViewSections = (s) => [
+    {
+      title: 'Student Information',
+      fields: [
+        { label: 'Admission No', value: s.admission_no },
+        { label: 'Name', value: s.full_name },
+        { label: 'Class', value: s.class_name ? formatClassName(s.class_name) : '' },
+        { label: 'Section', value: s.section },
+        { label: 'Roll No', value: s.roll_no },
+        { label: 'Status', value: s.status },
+        { label: 'Student Phone', value: s.student_phone },
+        { label: 'Student Email', value: s.student_email },
+      ],
+    },
+    {
+      title: 'Parent 1',
+      fields: [
+        { label: 'Name', value: s.parent1_name },
+        { label: 'Phone', value: s.parent1_phone },
+        { label: 'Email', value: s.parent1_email, fullWidth: true },
+      ],
+    },
+    {
+      title: 'Parent 2',
+      fields: [
+        { label: 'Name', value: s.parent2_name },
+        { label: 'Phone', value: s.parent2_phone },
+        { label: 'Email', value: s.parent2_email, fullWidth: true },
+      ],
+    },
+    {
+      title: 'Guardian',
+      fields: [
+        { label: 'Name', value: s.guardian_name },
+        { label: 'Phone', value: s.guardian_phone },
+        { label: 'Email', value: s.guardian_email, fullWidth: true },
+      ],
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-3 sm:p-6">
@@ -249,6 +347,32 @@ export default function StudentsPage() {
           >
             <Pencil size={18} /> Modify Student
           </button>
+
+          {/* ✅ Phase 1 — Item 7: Export to Excel */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:ml-auto">
+            <select
+              value={exportClass}
+              onChange={(e) => setExportClass(e.target.value)}
+              className="px-4 py-2.5 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:outline-none focus:border-white/40"
+              style={{ colorScheme: 'dark' }}
+            >
+              <option value="all" style={{ color: '#111827', backgroundColor: '#ffffff' }}>
+                All Classes
+              </option>
+              {uniqueClassNames.map((cn) => (
+                <option key={cn} value={cn} style={{ color: '#111827', backgroundColor: '#ffffff' }}>
+                  {formatClassName(cn)}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-5 sm:px-6 py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition disabled:opacity-50"
+            >
+              <Download size={18} /> {exporting ? 'Exporting...' : 'Export to Excel'}
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6">
@@ -311,7 +435,6 @@ export default function StudentsPage() {
                     <tr key={student.id || idx} className="border-t border-white/10 hover:bg-white/5">
                       <td className="px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm whitespace-nowrap">{student.admission_no || student.student_id || student.id}</td>
                       <td className="px-3 sm:px-4 py-3 text-white text-xs sm:text-sm font-medium">{student.name || student.full_name}</td>
-                      {/* ✅ Class name is formatted: "1" -> "1st Grade" */}
                       <td className="px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">
                         {student.class_name
                           ? formatClassName(student.class_name)
@@ -342,15 +465,25 @@ export default function StudentsPage() {
                       </td>
                       <td className="px-3 sm:px-4 py-3">
                         <div className="flex gap-1.5 sm:gap-2">
+                          {/* ✅ Phase 1 — Item 5: View */}
+                          <button
+                            onClick={() => setViewStudent(student)}
+                            className="p-1.5 rounded-lg bg-gray-500/20 text-gray-300 hover:bg-gray-500/30 transition"
+                            title="View details"
+                          >
+                            <Eye size={16} />
+                          </button>
                           <button
                             onClick={() => openModal('modify', student)}
                             className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition"
+                            title="Modify"
                           >
                             <Pencil size={16} />
                           </button>
                           <button
                             onClick={() => handleDelete(student.admission_no || student.id)}
                             className="p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
+                            title="Delete"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -392,6 +525,14 @@ export default function StudentsPage() {
         variant="danger"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* ✅ Phase 1 — Item 5: View Modal */}
+      <ViewModal
+        isOpen={!!viewStudent}
+        title={viewStudent ? `${viewStudent.full_name} — ${viewStudent.admission_no}` : ''}
+        sections={viewStudent ? buildViewSections(viewStudent) : []}
+        onClose={() => setViewStudent(null)}
       />
 
       <AlertModal

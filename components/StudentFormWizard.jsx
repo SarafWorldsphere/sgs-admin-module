@@ -110,6 +110,8 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
     let v = value;
     if (name.includes('phone')) v = value.replace(/[^\d]/g, '').slice(0, 10);
     if (name === 'roll_no') v = value.replace(/[^\d]/g, '').slice(0, 3);
+    // ✅ Admission Number: digits only, max 10 characters
+    if (name === 'admission_no') v = value.replace(/[^\d]/g, '').slice(0, 10);
 
     if (name === 'class_id') {
       setFormData((prev) => ({ ...prev, class_id: v, section: '' }));
@@ -125,6 +127,8 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
 
     if (stepNumber === 1) {
       if (!formData.admission_no) e.admission_no = 'Student ID is required';
+      else if (!/^\d+$/.test(String(formData.admission_no).trim()))
+        e.admission_no = 'Admission Number must contain digits only';
       if (!formData.full_name) e.full_name = 'Student Name is required';
       else if (!isValidName(formData.full_name))
         e.full_name = 'Name can only contain letters, spaces, dots, hyphens and apostrophes';
@@ -148,7 +152,6 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
       else if (!isValidPhone(formData.parent1_phone))
         e.parent1_phone = 'Enter a valid 10-digit mobile number';
 
-      // ✅ FIX #1: strict email validation for Parent 1
       if (formData.parent1_email && !isValidEmail(formData.parent1_email))
         e.parent1_email = 'Please enter a valid email address (e.g., name@domain.com)';
 
@@ -157,7 +160,6 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
       if (formData.parent2_phone && !isValidPhone(formData.parent2_phone))
         e.parent2_phone = 'Enter a valid 10-digit mobile number';
 
-      // ✅ FIX #1: strict email validation for Parent 2
       if (formData.parent2_email && !isValidEmail(formData.parent2_email))
         e.parent2_email = 'Please enter a valid email address (e.g., name@domain.com)';
     }
@@ -308,16 +310,21 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
                     <h4 className={`text-sm font-medium ${isDark ? 'text-white/80' : 'text-gray-700'}`}>Student Information</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className={`block text-sm font-medium ${labelColor}`}>Admission Number *</label>
+                        <label className={`block text-sm font-medium ${labelColor}`}>
+                          Admission Number * <span className="text-xs text-white/40">(digits only{editData ? ', read-only' : ''})</span>
+                        </label>
                         <input
                           type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={10}
                           name="admission_no"
                           value={formData.admission_no}
                           onChange={handleChange}
-                          readOnly
+                          readOnly={!!editData}
                           disabled={!!editData}
-                          className={`w-full px-3 py-2 mt-1 ${inputBg} border ${errors.admission_no ? 'border-red-500' : inputBorder} rounded-lg ${inputText} ${placeholderColor} focus:outline-none focus:border-blue-500`}
-                          placeholder="e.g., S001"
+                          className={`w-full px-3 py-2 mt-1 ${inputBg} border ${errors.admission_no ? 'border-red-500' : inputBorder} rounded-lg ${inputText} ${placeholderColor} focus:outline-none focus:border-blue-500 ${editData ? 'cursor-not-allowed' : ''}`}
+                          placeholder="e.g., 12345"
                         />
                         {errors.admission_no && <p className="mt-1 text-xs text-red-500">{errors.admission_no}</p>}
                       </div>

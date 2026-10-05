@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { 
-  Plus, Pencil, Trash2, Search, 
+  Plus, Pencil, Trash2, Search, Eye,
   BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../../../components/ConfirmModal';
 import ModifyLookupModal from '../../../components/ModifyLookupModal';
 import AlertModal from '../../../components/AlertModal';
+import ViewModal from '../../../components/ViewModal';
 import { isValidName, isValidEmail, isGmailEmail, isValidPhone, normalizePhone } from '../../../lib/validators';
 import { formatClassName } from '../../../lib/format-class-name';
 
@@ -25,6 +26,7 @@ export default function TeachersPage() {
   const [validationError, setValidationError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [lookupOpen, setLookupOpen] = useState(false);
+  const [viewTeacher, setViewTeacher] = useState(null);
   const modalBodyRef = useRef(null);
   const [alertState, setAlertState] = useState({ isOpen: false, title: '', message: '', variant: 'error' });
 
@@ -79,71 +81,20 @@ export default function TeachersPage() {
   };
 
   const validateForm = () => {
-    if (!formData.teacher_id.trim()) {
-      setValidationError('Teacher ID is required');
-      return false;
-    }
-    if (!formData.teacher_id.match(/^[TH]/)) {
-      setValidationError('Teacher ID must start with "T" (Teacher) or "H" (Headmaster)');
-      return false;
-    }
-    if (!formData.full_name.trim()) {
-      setValidationError('Teacher Name is required');
-      return false;
-    }
-    // ✅ Name must be letters, spaces, dots, hyphens, apostrophes only
-    if (!isValidName(formData.full_name)) {
-      setValidationError('Teacher Name can only contain letters, spaces, dots, hyphens and apostrophes');
-      return false;
-    }
-
-    if (!formData.email_id.trim()) {
-      setValidationError('Email is required');
-      return false;
-    }
-    // ✅ Proper email format
-    if (!isValidEmail(formData.email_id)) {
-      setValidationError('Please enter a valid email address (e.g., name@domain.com)');
-      return false;
-    }
-    // ✅ Teacher email must be @gmail.com only
-    if (!isGmailEmail(formData.email_id)) {
-      setValidationError('Teacher email must be a @gmail.com address');
-      return false;
-    }
-
+    if (!formData.teacher_id.trim()) { setValidationError('Teacher ID is required'); return false; }
+    if (!formData.teacher_id.match(/^[TH]/)) { setValidationError('Teacher ID must start with "T" (Teacher) or "H" (Headmaster)'); return false; }
+    if (!formData.full_name.trim()) { setValidationError('Teacher Name is required'); return false; }
+    if (!isValidName(formData.full_name)) { setValidationError('Teacher Name can only contain letters, spaces, dots, hyphens and apostrophes'); return false; }
+    if (!formData.email_id.trim()) { setValidationError('Email is required'); return false; }
+    if (!isValidEmail(formData.email_id)) { setValidationError('Please enter a valid email address (e.g., name@domain.com)'); return false; }
+    if (!isGmailEmail(formData.email_id)) { setValidationError('Teacher email must be a @gmail.com address'); return false; }
     if (formData.phone && formData.phone.trim() !== '') {
-      if (!isValidPhone(formData.phone)) {
-        setValidationError('Enter a valid 10-digit mobile number (starting 6-9)');
-        return false;
-      }
+      if (!isValidPhone(formData.phone)) { setValidationError('Enter a valid 10-digit mobile number (starting 6-9)'); return false; }
     }
-
-    // ✅ Subject — if provided, must be valid name characters
-    if (formData.subject_name && !isValidName(formData.subject_name)) {
-      setValidationError('Subject can only contain letters, spaces, dots, hyphens and apostrophes');
-      return false;
-    }
-
-    // ✅ Qualification — if provided, must be valid name characters
-    if (formData.qualification && !isValidName(formData.qualification)) {
-      setValidationError('Qualification can only contain letters, spaces, dots, hyphens and apostrophes');
-      return false;
-    }
-
-    // ✅ Section 1 — if provided, single letter A-Z
-    if (formData.section_1 && !/^[A-Za-z]$/.test(String(formData.section_1).trim())) {
-      setValidationError('Section 1 must be a single letter (A-Z)');
-      return false;
-    }
-
-    // ✅ Section 2 — if provided, single letter A-Z
-    if (formData.section_2 && !/^[A-Za-z]$/.test(String(formData.section_2).trim())) {
-      setValidationError('Section 2 must be a single letter (A-Z)');
-      return false;
-    }
-
-    // ✅ Subjects list — if provided, each item must be valid name characters
+    if (formData.subject_name && !isValidName(formData.subject_name)) { setValidationError('Subject can only contain letters, spaces, dots, hyphens and apostrophes'); return false; }
+    if (formData.qualification && !isValidName(formData.qualification)) { setValidationError('Qualification can only contain letters, spaces, dots, hyphens and apostrophes'); return false; }
+    if (formData.section_1 && !/^[A-Za-z]$/.test(String(formData.section_1).trim())) { setValidationError('Section 1 must be a single letter (A-Z)'); return false; }
+    if (formData.section_2 && !/^[A-Za-z]$/.test(String(formData.section_2).trim())) { setValidationError('Section 2 must be a single letter (A-Z)'); return false; }
     if (formData.subjects && String(formData.subjects).trim()) {
       const parts = String(formData.subjects).split(',').map(s => s.trim()).filter(Boolean);
       for (const part of parts) {
@@ -153,7 +104,6 @@ export default function TeachersPage() {
         }
       }
     }
-
     setValidationError('');
     return true;
   };
@@ -322,19 +272,9 @@ export default function TeachersPage() {
 
   const resetForm = () => {
     setFormData({
-      teacher_id: '',
-      full_name: '',
-      subject_name: '',
-      qualification: '',
-      class_id: '',
-      section_1: '',
-      section_2: '',
-      role: 'Teacher',
-      is_class_teacher: false,
-      subjects: '',
-      phone: '',
-      email_id: '',
-      is_active: true
+      teacher_id: '', full_name: '', subject_name: '', qualification: '',
+      class_id: '', section_1: '', section_2: '', role: 'Teacher',
+      is_class_teacher: false, subjects: '', phone: '', email_id: '', is_active: true
     });
     setSelectedTeacher(null);
     setValidationError('');
@@ -505,6 +445,13 @@ export default function TeachersPage() {
                       </td>
                       <td className="px-3 sm:px-4 py-3">
                         <div className="flex gap-1.5 sm:gap-2">
+                          <button
+                            onClick={() => setViewTeacher(teacher)}
+                            className="p-1.5 rounded-lg bg-gray-500/20 text-gray-300 hover:bg-gray-500/30 transition"
+                            title="View details"
+                          >
+                            <Eye size={16} />
+                          </button>
                           <button
                             onClick={() => openModal('modify', teacher)}
                             className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition"
@@ -753,6 +700,49 @@ export default function TeachersPage() {
         variant="danger"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ViewModal
+        isOpen={!!viewTeacher}
+        title={viewTeacher ? `${viewTeacher.name || viewTeacher.full_name || ''} — ${viewTeacher.teacher_id || viewTeacher.id || ''}` : ''}
+        sections={viewTeacher ? [
+          {
+            title: 'Teacher Information',
+            fields: [
+              { label: 'Teacher ID', value: viewTeacher.teacher_id || viewTeacher.id },
+              { label: 'Name', value: viewTeacher.name || viewTeacher.full_name },
+              { label: 'Subject', value: viewTeacher.subject || viewTeacher.subject_name },
+              { label: 'Qualification', value: viewTeacher.qualification },
+              { label: 'Role', value: viewTeacher.role },
+              { label: 'Status', value: viewTeacher.status },
+              { label: 'Phone', value: viewTeacher.contact || viewTeacher.phone },
+              { label: 'Email', value: viewTeacher.email || viewTeacher.email_id },
+            ],
+          },
+          {
+            title: 'Class Assignment',
+            fields: [
+              { label: 'Class', value: viewTeacher.class_id
+                  ? formatClassName(
+                      availableClasses.find(c => String(c.class_id) === String(viewTeacher.class_id))?.class_name
+                      || viewTeacher.class_id
+                    )
+                  : '' },
+              { label: 'Section 1', value: viewTeacher.section_1 },
+              { label: 'Section 2', value: viewTeacher.section_2 },
+              { label: 'Class Teacher', value: viewTeacher.is_class_teacher ? 'Yes' : 'No' },
+            ],
+          },
+          {
+            title: 'Subjects Taught',
+            fields: [
+              { label: 'Subjects', value: Array.isArray(viewTeacher.subjects)
+                  ? viewTeacher.subjects.join(', ')
+                  : viewTeacher.subjects, fullWidth: true },
+            ],
+          },
+        ] : []}
+        onClose={() => setViewTeacher(null)}
       />
 
       <AlertModal
