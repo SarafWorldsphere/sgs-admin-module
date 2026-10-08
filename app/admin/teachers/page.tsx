@@ -1,59 +1,38 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   Plus, Pencil, Trash2, Search, Eye,
   BookOpen
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../../../components/ConfirmModal';
-import ModifyLookupModal from '../../../components/ModifyLookupModal';
 import AlertModal from '../../../components/AlertModal';
 import ViewModal from '../../../components/ViewModal';
-import { isValidName, isValidEmail, isGmailEmail, isValidPhone, normalizePhone } from '../../../lib/validators';
 import { formatClassName } from '../../../lib/format-class-name';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
 
 export default function TeachersPage() {
+  const router = useRouter();
   const [teachers, setTeachers] = useState([]);
   const [availableClasses, setAvailableClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState('add');
-  const [selectedTeacher, setSelectedTeacher] = useState(null);
-  const [validationError, setValidationError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [lookupOpen, setLookupOpen] = useState(false);
   const [viewTeacher, setViewTeacher] = useState(null);
-  const modalBodyRef = useRef(null);
   const [alertState, setAlertState] = useState({ isOpen: false, title: '', message: '', variant: 'error' });
+  const [statsData, setStatsData] = useState({ total: 0, active: 0, inactive: 0 });
 
   const showAlert = (message, variant = 'error', title = 'Error') =>
     setAlertState({ isOpen: true, title, message, variant });
   const closeAlert = () =>
     setAlertState({ isOpen: false, title: '', message: '', variant: 'error' });
 
-  const [formData, setFormData] = useState({
-    teacher_id: '',
-    full_name: '',
-    subject_name: '',
-    qualification: '',
-    class_id: '',
-    section_1: '',
-    section_2: '',
-    role: 'Teacher',
-    is_class_teacher: false,
-    subjects: '',
-    phone: '',
-    email_id: '',
-    is_active: true
-  });
-
   useEffect(() => {
     fetchTeachers();
     fetchClasses();
+    fetchStats();
   }, []);
 
   const fetchTeachers = async () => {
@@ -80,122 +59,18 @@ export default function TeachersPage() {
     }
   };
 
-  const validateForm = () => {
-    if (!formData.teacher_id.trim()) { setValidationError('Teacher ID is required'); return false; }
-    if (!formData.teacher_id.match(/^[TH]/)) { setValidationError('Teacher ID must start with "T" (Teacher) or "H" (Headmaster)'); return false; }
-    if (!formData.full_name.trim()) { setValidationError('Teacher Name is required'); return false; }
-    if (!isValidName(formData.full_name)) { setValidationError('Teacher Name can only contain letters, spaces, dots, hyphens and apostrophes'); return false; }
-    if (!formData.email_id.trim()) { setValidationError('Email is required'); return false; }
-    if (!isValidEmail(formData.email_id)) { setValidationError('Please enter a valid email address (e.g., name@domain.com)'); return false; }
-    if (!isGmailEmail(formData.email_id)) { setValidationError('Teacher email must be a @gmail.com address'); return false; }
-    if (formData.phone && formData.phone.trim() !== '') {
-      if (!isValidPhone(formData.phone)) { setValidationError('Enter a valid 10-digit mobile number (starting 6-9)'); return false; }
-    }
-    if (formData.subject_name && !isValidName(formData.subject_name)) { setValidationError('Subject can only contain letters, spaces, dots, hyphens and apostrophes'); return false; }
-    if (formData.qualification && !isValidName(formData.qualification)) { setValidationError('Qualification can only contain letters, spaces, dots, hyphens and apostrophes'); return false; }
-    if (formData.section_1 && !/^[A-Za-z]$/.test(String(formData.section_1).trim())) { setValidationError('Section 1 must be a single letter (A-Z)'); return false; }
-    if (formData.section_2 && !/^[A-Za-z]$/.test(String(formData.section_2).trim())) { setValidationError('Section 2 must be a single letter (A-Z)'); return false; }
-    if (formData.subjects && String(formData.subjects).trim()) {
-      const parts = String(formData.subjects).split(',').map(s => s.trim()).filter(Boolean);
-      for (const part of parts) {
-        if (!isValidName(part)) {
-          setValidationError(`Invalid subject: "${part}". Only letters, spaces, dots, hyphens and apostrophes allowed.`);
-          return false;
-        }
-      }
-    }
-    setValidationError('');
-    return true;
-  };
-
-  const handleAdd = async () => {
-    if (!validateForm()) { scrollToTop(); return; }
+  const fetchStats = async () => {
     try {
-      const classIdValue = formData.class_id && String(formData.class_id).trim() !== ''
-        ? parseInt(formData.class_id)
-        : null;
-
-      const response = await fetch(`${API_BASE_URL}/teachers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          teacher_id: formData.teacher_id,
-          name: formData.full_name,
-          subject: formData.subject_name,
-          qualification: formData.qualification,
-          class_id: classIdValue,
-          section_1: formData.section_1,
-          section_2: formData.section_2,
-          role: formData.role,
-          is_class_teacher: formData.is_class_teacher,
-          subjects: formData.subjects,
-          contact: formData.phone ? normalizePhone(formData.phone) : null,
-          email: formData.email_id,
-          status: formData.is_active ? 'Active' : 'Inactive'
-        })
+      const response = await fetch(`${API_BASE_URL}/teachers/stats`);
+      const data = await response.json();
+      setStatsData({
+        total: Number(data.total) || 0,
+        active: Number(data.active) || 0,
+        inactive: Number(data.inactive) || 0,
       });
-      if (response.ok) {
-        fetchTeachers();
-        setIsModalOpen(false);
-        resetForm();
-      } else {
-        const error = await response.json();
-        setValidationError(error.error || 'Failed to add teacher');
-        scrollToTop();
-      }
     } catch (error) {
-      console.error('Error adding teacher:', error);
-      setValidationError('Failed to add teacher');
-      scrollToTop();
+      console.error('Error fetching teacher stats:', error);
     }
-  };
-
-  const handleModify = async () => {
-    if (!validateForm()) { scrollToTop(); return; }
-    if (selectedTeacher) {
-      try {
-        const classIdValue = formData.class_id && String(formData.class_id).trim() !== ''
-          ? parseInt(formData.class_id)
-          : null;
-
-        const response = await fetch(`${API_BASE_URL}/teachers`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            teacher_id: formData.teacher_id,
-            name: formData.full_name,
-            subject: formData.subject_name,
-            qualification: formData.qualification,
-            class_id: classIdValue,
-            section_1: formData.section_1,
-            section_2: formData.section_2,
-            role: formData.role,
-            is_class_teacher: formData.is_class_teacher,
-            subjects: formData.subjects,
-            contact: formData.phone ? normalizePhone(formData.phone) : null,
-            email: formData.email_id,
-            status: formData.is_active ? 'Active' : 'Inactive'
-          })
-        });
-        if (response.ok) {
-          fetchTeachers();
-          setIsModalOpen(false);
-          resetForm();
-        } else {
-          const error = await response.json();
-          setValidationError(error.error || 'Failed to update teacher');
-          scrollToTop();
-        }
-      } catch (error) {
-        console.error('Error updating teacher:', error);
-        setValidationError('Failed to update teacher');
-        scrollToTop();
-      }
-    }
-  };
-
-  const scrollToTop = () => {
-    if (modalBodyRef.current) modalBodyRef.current.scrollTop = 0;
   };
 
   const handleToggleStatus = async (teacher) => {
@@ -204,7 +79,7 @@ export default function TeachersPage() {
 
     setTeachers((prev) =>
       prev.map((t) =>
-        t.teacher_id === teacher.teacher_id
+        (t.teacher_id || t.id) === (teacher.teacher_id || teacher.id)
           ? { ...t, status: newStatus, is_active: newStatus === 'Active' }
           : t
       )
@@ -220,7 +95,7 @@ export default function TeachersPage() {
       if (!response.ok) {
         setTeachers((prev) =>
           prev.map((t) =>
-            t.teacher_id === teacher.teacher_id
+            (t.teacher_id || t.id) === (teacher.teacher_id || teacher.id)
               ? { ...t, status: currentStatus, is_active: currentStatus === 'Active' }
               : t
           )
@@ -230,11 +105,12 @@ export default function TeachersPage() {
         return;
       }
       fetchTeachers();
+      fetchStats();
     } catch (error) {
       console.error('Toggle error:', error);
       setTeachers((prev) =>
         prev.map((t) =>
-          t.teacher_id === teacher.teacher_id
+          (t.teacher_id || t.id) === (teacher.teacher_id || teacher.id)
             ? { ...t, status: currentStatus, is_active: currentStatus === 'Active' }
             : t
         )
@@ -243,25 +119,20 @@ export default function TeachersPage() {
     }
   };
 
-  const handleModifyLookup = (id) => {
-    const teacher = teachers.find(
-      (t) => String(t.id) === String(id) || String(t.teacher_id) === String(id)
-    );
-    if (teacher) {
-      setLookupOpen(false);
-      openModal('modify', teacher);
-      return true;
-    }
-    return false;
-  };
-
   const handleDelete = (id) => setDeleteTarget(id);
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await fetch(`${API_BASE_URL}/teachers?id=${deleteTarget}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE_URL}/teachers?id=${encodeURIComponent(deleteTarget)}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        showAlert(err.error || 'Could not delete the teacher.', 'error', 'Delete Failed');
+      }
       fetchTeachers();
+      fetchStats();
     } catch (error) {
       console.error('Error deleting teacher:', error);
       showAlert('Could not delete the teacher. Please try again.', 'error', 'Delete Failed');
@@ -270,64 +141,18 @@ export default function TeachersPage() {
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      teacher_id: '', full_name: '', subject_name: '', qualification: '',
-      class_id: '', section_1: '', section_2: '', role: 'Teacher',
-      is_class_teacher: false, subjects: '', phone: '', email_id: '', is_active: true
-    });
-    setSelectedTeacher(null);
-    setValidationError('');
-  };
-
-  const openModal = (type, teacher = null) => {
-    setModalType(type);
-    setValidationError('');
-    if (type === 'add') {
-      resetForm();
-      const nextId = teachers.length + 1;
-      setFormData(prev => ({ ...prev, teacher_id: `T${String(nextId).padStart(3, '0')}` }));
-    } else if (type === 'modify' && teacher) {
-      setSelectedTeacher(teacher);
-      setFormData({
-        teacher_id: teacher.id || teacher.teacher_id || '',
-        full_name: teacher.name || teacher.full_name || '',
-        subject_name: teacher.subject || teacher.subject_name || '',
-        qualification: teacher.qualification || '',
-        class_id: teacher.class_id || '',
-        section_1: teacher.section_1 || '',
-        section_2: teacher.section_2 || '',
-        role: teacher.role || 'Teacher',
-        is_class_teacher: teacher.is_class_teacher || false,
-        subjects: Array.isArray(teacher.subjects) ? teacher.subjects.join(', ') : teacher.subjects || '',
-        phone: teacher.contact || teacher.phone || '',
-        email_id: teacher.email || teacher.email_id || '',
-        is_active: teacher.status === 'Active' || teacher.is_active === true
-      });
-    }
-    setIsModalOpen(true);
-  };
-
-  const handlePhoneChange = (e) => {
-    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
-    setFormData((prev) => ({ ...prev, phone: digits }));
-  };
-
   const filteredTeachers = Array.isArray(teachers) ? teachers.filter(t => {
     const term = searchTerm.toLowerCase();
-    const idStr = t.id ? String(t.id) : '';
-    const nameStr = t.name || '';
-    const subjectStr = t.subject || '';
+    const idStr = t.id || t.teacher_id ? String(t.id || t.teacher_id) : '';
+    const nameStr = t.name || t.full_name || '';
+    const subjectStr = t.subject || t.subject_name || '';
     return nameStr.toLowerCase().includes(term) || 
            idStr.toLowerCase().includes(term) ||
            subjectStr.toLowerCase().includes(term);
   }) : [];
 
-  const stats = {
-    total: Array.isArray(teachers) ? teachers.length : 0,
-    active: Array.isArray(teachers) ? teachers.filter(t => t.status === 'Active' || t.is_active === true).length : 0,
-    inactive: Array.isArray(teachers) ? teachers.filter(t => t.status === 'Inactive' || t.is_active === false).length : 0,
-  };
+  // ✅ Use real stats from DB (includes Inactive teachers that are hidden from the list)
+  const stats = statsData;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-3 sm:p-6">
@@ -360,16 +185,10 @@ export default function TeachersPage() {
 
         <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 mb-6">
           <button
-            onClick={() => openModal('add')}
+            onClick={() => router.push('/admin/teachers/new')}
             className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-5 sm:px-6 py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition"
           >
             <Plus size={18} /> Add Teacher
-          </button>
-          <button
-            onClick={() => setLookupOpen(true)}
-            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-5 sm:px-6 py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition"
-          >
-            <Pencil size={18} /> Modify Teacher
           </button>
         </div>
 
@@ -412,9 +231,10 @@ export default function TeachersPage() {
                 ) : (
                   filteredTeachers.map((teacher, idx) => {
                     const isActive = teacher.status === 'Active' || teacher.is_active === true;
+                    const teacherKey = teacher.teacher_id || teacher.id;
                     return (
-                    <tr key={teacher.id || teacher.teacher_id || idx} className="border-t border-white/10 hover:bg-white/5">
-                      <td className="px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm whitespace-nowrap">{teacher.id || teacher.teacher_id || '-'}</td>
+                    <tr key={teacherKey || idx} className="border-t border-white/10 hover:bg-white/5">
+                      <td className="px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm whitespace-nowrap">{teacher.teacher_id || teacher.id || '-'}</td>
                       <td className="px-3 sm:px-4 py-3 text-white text-xs sm:text-sm font-medium">{teacher.name || teacher.full_name || '-'}</td>
                       <td className="px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">{teacher.subject || teacher.subject_name || '-'}</td>
                       <td className="hidden md:table-cell px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">{teacher.qualification || '-'}</td>
@@ -453,14 +273,16 @@ export default function TeachersPage() {
                             <Eye size={16} />
                           </button>
                           <button
-                            onClick={() => openModal('modify', teacher)}
+                            onClick={() => router.push(`/admin/teachers/${encodeURIComponent(teacherKey)}/edit`)}
                             className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition"
+                            title="Modify"
                           >
                             <Pencil size={16} />
                           </button>
                           <button
-                            onClick={() => handleDelete(teacher.id || teacher.teacher_id)}
+                            onClick={() => handleDelete(teacherKey)}
                             className="p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
+                            title="Delete"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -475,221 +297,6 @@ export default function TeachersPage() {
           </div>
         </div>
       </div>
-
-      <AnimatePresence>
-        {isModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-4"
-            onClick={() => setIsModalOpen(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 sm:p-8 w-full max-w-2xl border border-white/20 max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-              ref={modalBodyRef}
-            >
-              <div className="flex justify-between mb-4 sm:mb-6">
-                <h2 className="text-xl sm:text-2xl font-bold text-white">
-                  {modalType === 'add' ? 'Add New Teacher' : 'Modify Teacher'}
-                </h2>
-                <button 
-                  onClick={() => { setIsModalOpen(false); resetForm(); }} 
-                  className="text-white/40 hover:text-white"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {validationError && (
-                <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-3 text-red-400 text-sm text-center mb-4">
-                  {validationError}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">
-                    Teacher ID * <span className="text-xs text-white/40">(auto-generated, read-only)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g., T001"
-                    value={formData.teacher_id}
-                    readOnly
-                    disabled
-                    className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white/60 cursor-not-allowed"
-                  />
-                </div>
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">Teacher Name *</label>
-                  <input
-                    type="text"
-                    placeholder="Enter teacher name"
-                    value={formData.full_name}
-                    onChange={(e) => setFormData({...formData, full_name: e.target.value})}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-white/40"
-                  />
-                </div>
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">Subject</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Mathematics"
-                    value={formData.subject_name}
-                    onChange={(e) => setFormData({...formData, subject_name: e.target.value})}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-white/40"
-                  />
-                </div>
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">Qualification</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., M.Sc, B.Ed"
-                    value={formData.qualification}
-                    onChange={(e) => setFormData({...formData, qualification: e.target.value})}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-white/40"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">Class</label>
-                  <select
-                    value={formData.class_id}
-                    onChange={(e) => setFormData({...formData, class_id: e.target.value})}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:border-white/40"
-                  >
-                    <option value="" style={{ color: '#111827', backgroundColor: '#ffffff' }}>
-                      — No class assigned —
-                    </option>
-                    {availableClasses.map((cls, i) => (
-                      <option key={cls.class_id || i} value={cls.class_id} style={{ color: '#111827', backgroundColor: '#ffffff' }}>
-                        {formatClassName(cls.class_name)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">Section 1</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., A"
-                    value={formData.section_1}
-                    onChange={(e) => setFormData({...formData, section_1: e.target.value})}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-white/40"
-                  />
-                </div>
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">Section 2</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., B"
-                    value={formData.section_2}
-                    onChange={(e) => setFormData({...formData, section_2: e.target.value})}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-white/40"
-                  />
-                </div>
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">Subjects (comma separated)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Math, Science"
-                    value={formData.subjects}
-                    onChange={(e) => setFormData({...formData, subjects: e.target.value})}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-white/40"
-                  />
-                </div>
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">Contact Number</label>
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    maxLength={10}
-                    placeholder="10-digit mobile"
-                    value={formData.phone}
-                    onChange={handlePhoneChange}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-white/40"
-                  />
-                  <p className="text-xs text-white/40 mt-1">10 digits, starting with 6-9</p>
-                </div>
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">
-                    Email * <span className="text-xs text-white/40">(gmail only)</span>
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="teacher@gmail.com"
-                    value={formData.email_id}
-                    onChange={(e) => setFormData({...formData, email_id: e.target.value})}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-white/40"
-                  />
-                </div>
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">Role</label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({...formData, role: e.target.value})}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:border-white/40"
-                  >
-                    <option value="Teacher"       style={{ color: '#111827', backgroundColor: '#ffffff' }}>Teacher</option>
-                    <option value="Headmaster"    style={{ color: '#111827', backgroundColor: '#ffffff' }}>Headmaster</option>
-                    <option value="Class Teacher" style={{ color: '#111827', backgroundColor: '#ffffff' }}>Class Teacher</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-white/70 text-sm block mb-1">Status</label>
-                  <select
-                    value={formData.is_active ? 'Active' : 'Inactive'}
-                    onChange={(e) => setFormData({...formData, is_active: e.target.value === 'Active'})}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:border-white/40"
-                  >
-                    <option value="Active"   style={{ color: '#111827', backgroundColor: '#ffffff' }}>Active</option>
-                    <option value="Inactive" style={{ color: '#111827', backgroundColor: '#ffffff' }}>Inactive</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="text-white/70 text-sm">Class Teacher:</label>
-                  <input
-                    type="checkbox"
-                    checked={formData.is_class_teacher}
-                    onChange={(e) => setFormData({...formData, is_class_teacher: e.target.checked})}
-                    className="w-5 h-5 accent-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 mt-6">
-                <button
-                  onClick={modalType === 'add' ? handleAdd : handleModify}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:shadow-lg transition"
-                >
-                  {modalType === 'add' ? 'Add Teacher' : 'Save Changes'}
-                </button>
-                <button
-                  onClick={() => { setIsModalOpen(false); resetForm(); }}
-                  className="flex-1 py-3 bg-white/10 text-white rounded-xl font-semibold hover:bg-white/20 transition"
-                >
-                  Cancel
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <ModifyLookupModal
-        isOpen={lookupOpen}
-        onClose={() => setLookupOpen(false)}
-        onSubmit={handleModifyLookup}
-        title="Modify Teacher"
-        placeholder="Enter Teacher ID (e.g., T001 or H001)"
-        errorText="Teacher not found. Please check the ID."
-      />
 
       <ConfirmModal
         isOpen={!!deleteTarget}

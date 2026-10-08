@@ -156,6 +156,7 @@ export async function GET() {
         is_active,
         CASE WHEN is_active = true THEN 'Active' ELSE 'Inactive' END as status
       FROM sgs_teacher_master
+      WHERE is_active = true
       ORDER BY teacher_id
     `;
 
