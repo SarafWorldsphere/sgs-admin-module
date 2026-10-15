@@ -67,21 +67,13 @@ function friendlyDbError(error) {
   return 'Something went wrong while saving. Please try again or contact support.';
 }
 
-/**
- * Normalize the class_map payload from the form.
- * Expected: array of { class_id, section, subjects: string[], is_class_teacher: bool }
- * Returns: array of flat rows: { class_id, section, subject_name, is_class_teacher }
- *   - one row per (class, section, subject)
- *   - if subjects is empty, we still emit ONE row with subject_name = null
- *     so the (class, section) assignment exists even with no subjects
- */
 function normalizeClassMap(input) {
-  if (!Array.isArray(input)) return null; // signal "not provided"
+  if (!Array.isArray(input)) return null;
   const rows = [];
   for (const entry of input) {
     const classId = toBigintOrNull(entry?.class_id);
     const section = entry?.section ? String(entry.section).trim() : '';
-    if (classId === null || !section) continue; // skip incomplete entries
+    if (classId === null || !section) continue;
 
     const isClassTeacher = !!entry.is_class_teacher;
     const subjects = Array.isArray(entry.subjects)
@@ -113,12 +105,6 @@ function normalizeClassMap(input) {
   return rows;
 }
 
-/**
- * Replace the teacher's rows in sgs_teacher_class_map with the given set.
- * MUST be called inside a transaction.
- * - Deletes ALL existing rows for this teacher
- * - Inserts the new set
- */
 async function replaceTeacherClassMap(tx, teacherId, rows) {
   await tx`
     DELETE FROM sgs_teacher_class_map
@@ -135,7 +121,14 @@ async function replaceTeacherClassMap(tx, teacherId, rows) {
   }
 }
 
-// ---- GET: list all teachers (Active + Inactive) ------------------------
+// ============================================================================
+// GET /api/teachers
+// - Hides ONLY record_status = 'Deleted' (per Bhuvan).
+// - Includes aggregated "assignments" array per teacher, built from
+//   sgs_teacher_class_map. Falls back to a single assignment built from
+//   teacher_master (class_id + section_1 + subjects) if the teacher has no
+//   map rows yet.
+// ============================================================================
 
 export async function GET() {
   try {
@@ -154,16 +147,77 @@ export async function GET() {
         phone as contact,
         email_id as email,
         is_active,
+        record_status,
         CASE WHEN is_active = true THEN 'Active' ELSE 'Inactive' END as status
       FROM sgs_teacher_master
-      WHERE is_active = true
+      WHERE (record_status IS NULL OR record_status != 'Deleted')
       ORDER BY teacher_id
     `;
 
-    const normalized = teachers.map((t) => ({
-      ...t,
-      subjects: Array.isArray(t.subjects) ? t.subjects.join(', ') : t.subjects || '',
-    }));
+    // Fetch all map rows in one query — keyed by teacher_id
+    const mapRows = await sql`
+      SELECT teacher_id, class_id, section, subject_name, is_class_teacher
+      FROM sgs_teacher_class_map
+      WHERE (record_status IS NULL OR record_status != 'Deleted')
+      ORDER BY teacher_id, class_id, section, subject_name
+    `;
+
+    // Group map rows by teacher
+    const byTeacher = new Map();
+    for (const r of mapRows) {
+      const tid = String(r.teacher_id);
+      if (!byTeacher.has(tid)) byTeacher.set(tid, new Map());
+      const byClassSection = byTeacher.get(tid);
+      const cid = String(r.class_id);
+      const sec = String(r.section || '');
+      const key = `${cid}::${sec}`;
+      if (!byClassSection.has(key)) {
+        byClassSection.set(key, {
+          class_id: cid,
+          section: sec,
+          subjects: new Set(),
+          is_class_teacher: false,
+        });
+      }
+      const entry = byClassSection.get(key);
+      if (r.subject_name) entry.subjects.add(r.subject_name);
+      if (r.is_class_teacher) entry.is_class_teacher = true;
+    }
+
+    const normalized = teachers.map((t) => {
+      const tid = String(t.id);
+      const assignments = [];
+
+      const grouped = byTeacher.get(tid);
+      if (grouped && grouped.size > 0) {
+        for (const entry of grouped.values()) {
+          assignments.push({
+            class_id: entry.class_id,
+            section: entry.section,
+            subjects: Array.from(entry.subjects),
+            is_class_teacher: entry.is_class_teacher,
+          });
+        }
+      } else if (t.class_id) {
+        // Legacy: teacher has class_id in master but no map rows yet
+        assignments.push({
+          class_id: String(t.class_id),
+          section: String(t.section_1 || ''),
+          subjects: Array.isArray(t.subjects)
+            ? t.subjects
+            : (typeof t.subjects === 'string' && t.subjects
+                ? t.subjects.split(',').map((s) => s.trim()).filter(Boolean)
+                : []),
+          is_class_teacher: t.is_class_teacher === true,
+        });
+      }
+
+      return {
+        ...t,
+        subjects: Array.isArray(t.subjects) ? t.subjects.join(', ') : t.subjects || '',
+        assignments,
+      };
+    });
 
     return NextResponse.json(normalized);
   } catch (error) {
@@ -172,7 +226,9 @@ export async function GET() {
   }
 }
 
-// ---- POST: create new teacher ------------------------------------------
+// ============================================================================
+// POST /api/teachers
+// ============================================================================
 
 export async function POST(request) {
   try {
@@ -181,7 +237,7 @@ export async function POST(request) {
       teacher_id, name, subject, qualification, class_id,
       section_1, section_2, role, is_class_teacher,
       subjects, contact, email, status,
-      class_map, // ✅ NEW — array of { class_id, section, subjects[], is_class_teacher }
+      class_map,
     } = body;
 
     if (!teacher_id || !name || !email) {
@@ -198,7 +254,6 @@ export async function POST(request) {
       );
     }
 
-    // ✅ Gmail-only
     if (!isGmailEmail(email)) {
       return NextResponse.json(
         { error: 'Teacher email must be a @gmail.com address.' },
@@ -206,7 +261,6 @@ export async function POST(request) {
       );
     }
 
-    // Duplicate teacher_id check
     const dupeId = await sql`
       SELECT teacher_id FROM sgs_teacher_master WHERE teacher_id = ${teacher_id}
     `;
@@ -217,7 +271,6 @@ export async function POST(request) {
       );
     }
 
-    // Duplicate email check
     if (email && String(email).trim()) {
       const dupeEmail = await sql`
         SELECT teacher_id, full_name
@@ -263,15 +316,14 @@ export async function POST(request) {
         INSERT INTO sgs_teacher_master (
           teacher_id, full_name, subject_name, qualification, class_id,
           section_1, section_2, role, is_class_teacher,
-          subjects, phone, email_id, is_active
+          subjects, phone, email_id, is_active, record_status
         ) VALUES (
           ${teacher_id}, ${name}, ${subject || null}, ${qualification || null}, ${classIdValue},
           ${section_1 || null}, ${section_2 || null}, ${role || 'Teacher'}, ${is_class_teacher || false},
-          ${subjectsArray}, ${normalizedPhone}, ${email}, ${status === 'Active'}
+          ${subjectsArray}, ${normalizedPhone}, ${email}, ${status === 'Active'}, 'Active'
         ) RETURNING *
       `;
 
-      // ✅ NEW — write map rows if provided
       if (mapRows !== null) {
         await replaceTeacherClassMap(tx, teacher_id, mapRows);
       }
@@ -292,7 +344,11 @@ export async function POST(request) {
   }
 }
 
-// ---- PUT: update existing teacher OR toggle status ---------------------
+// ============================================================================
+// PUT /api/teachers
+// - Status-only toggle touches ONLY is_active (per Bhuvan).
+// - Full update writes all fields including class_map.
+// ============================================================================
 
 export async function PUT(request) {
   try {
@@ -303,7 +359,7 @@ export async function PUT(request) {
       return NextResponse.json({ error: 'Teacher ID is required' }, { status: 400 });
     }
 
-    // STATUS-ONLY TOGGLE
+    // ---- STATUS-ONLY TOGGLE (is_active only — no record_status) ----
     if (status !== undefined && !body.name) {
       const newStatus = status === 'Active';
       const result = await sql`
@@ -323,10 +379,9 @@ export async function PUT(request) {
       name, subject, qualification, class_id,
       section_1, section_2, role, is_class_teacher,
       subjects, contact, email,
-      class_map, // ✅ NEW
+      class_map,
     } = body;
 
-    // ✅ Gmail-only
     if (!email || !String(email).trim() || !isGmailEmail(email)) {
       return NextResponse.json(
         { error: 'Teacher email must be a @gmail.com address.' },
@@ -334,7 +389,6 @@ export async function PUT(request) {
       );
     }
 
-    // Duplicate email check (exclude self)
     if (email && String(email).trim()) {
       const dupeEmail = await sql`
         SELECT teacher_id, full_name
@@ -399,7 +453,6 @@ export async function PUT(request) {
         throw new Error('Teacher not found');
       }
 
-      // ✅ NEW — replace map rows only if provided
       if (mapRows !== null) {
         await replaceTeacherClassMap(tx, teacher_id, mapRows);
       }
@@ -420,7 +473,11 @@ export async function PUT(request) {
   }
 }
 
-// ---- DELETE: soft-delete (set is_active = false) -----------------------
+// ============================================================================
+// DELETE /api/teachers
+// - Sets BOTH record_status = 'Deleted' AND is_active = false
+//   (per Bhuvan: faculty login only checks is_active, so both must be set).
+// ============================================================================
 
 export async function DELETE(request) {
   try {
@@ -428,8 +485,10 @@ export async function DELETE(request) {
     const id = searchParams.get('id');
 
     const result = await sql`
-      UPDATE sgs_teacher_master SET is_active = false
-      WHERE teacher_id = ${id} RETURNING *
+      UPDATE sgs_teacher_master
+      SET record_status = 'Deleted', is_active = false
+      WHERE teacher_id = ${id}
+      RETURNING *
     `;
     if (result.length === 0) {
       return NextResponse.json({ error: 'Teacher not found' }, { status: 404 });

@@ -73,13 +73,14 @@ export default function TeachersPage() {
     }
   };
 
+  // ✅ Toggle touches ONLY is_active (per Bhuvan)
   const handleToggleStatus = async (teacher) => {
     const currentStatus = teacher.status || (teacher.is_active ? 'Active' : 'Inactive');
     const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
 
     setTeachers((prev) =>
       prev.map((t) =>
-        (t.teacher_id || t.id) === (teacher.teacher_id || teacher.id)
+        t.teacher_id === teacher.teacher_id
           ? { ...t, status: newStatus, is_active: newStatus === 'Active' }
           : t
       )
@@ -95,7 +96,7 @@ export default function TeachersPage() {
       if (!response.ok) {
         setTeachers((prev) =>
           prev.map((t) =>
-            (t.teacher_id || t.id) === (teacher.teacher_id || teacher.id)
+            t.teacher_id === teacher.teacher_id
               ? { ...t, status: currentStatus, is_active: currentStatus === 'Active' }
               : t
           )
@@ -110,7 +111,7 @@ export default function TeachersPage() {
       console.error('Toggle error:', error);
       setTeachers((prev) =>
         prev.map((t) =>
-          (t.teacher_id || t.id) === (teacher.teacher_id || teacher.id)
+          t.teacher_id === teacher.teacher_id
             ? { ...t, status: currentStatus, is_active: currentStatus === 'Active' }
             : t
         )
@@ -124,13 +125,7 @@ export default function TeachersPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/teachers?id=${encodeURIComponent(deleteTarget)}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        showAlert(err.error || 'Could not delete the teacher.', 'error', 'Delete Failed');
-      }
+      await fetch(`${API_BASE_URL}/teachers?id=${deleteTarget}`, { method: 'DELETE' });
       fetchTeachers();
       fetchStats();
     } catch (error) {
@@ -143,16 +138,38 @@ export default function TeachersPage() {
 
   const filteredTeachers = Array.isArray(teachers) ? teachers.filter(t => {
     const term = searchTerm.toLowerCase();
-    const idStr = t.id || t.teacher_id ? String(t.id || t.teacher_id) : '';
-    const nameStr = t.name || t.full_name || '';
-    const subjectStr = t.subject || t.subject_name || '';
+    const idStr = t.id ? String(t.id) : '';
+    const nameStr = t.name || '';
+    const subjectStr = t.subject || '';
     return nameStr.toLowerCase().includes(term) || 
            idStr.toLowerCase().includes(term) ||
            subjectStr.toLowerCase().includes(term);
   }) : [];
 
-  // ✅ Use real stats from DB (includes Inactive teachers that are hidden from the list)
   const stats = statsData;
+
+  // ✅ Format a single assignment for display: "8A (Maths, Science)"
+  const formatAssignment = (a) => {
+    const className = a.class_id
+      ? formatClassName(
+          availableClasses.find(c => String(c.class_id) === String(a.class_id))?.class_name
+          || a.class_id
+        )
+      : '';
+    const sectionPart = a.section ? ` ${a.section}` : '';
+    const subjectList = Array.isArray(a.subjects)
+      ? a.subjects.filter(Boolean).join(', ')
+      : (a.subjects || '');
+    const subjectPart = subjectList ? ` (${subjectList})` : '';
+    const ct = a.is_class_teacher ? ' · CT' : '';
+    return `${className}${sectionPart}${subjectPart}${ct}`;
+  };
+
+  // ✅ Format all assignments joined with " • "
+  const formatAllAssignments = (assignments) => {
+    if (!Array.isArray(assignments) || assignments.length === 0) return '-';
+    return assignments.map(formatAssignment).join(' • ');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-3 sm:p-6">
@@ -206,16 +223,13 @@ export default function TeachersPage() {
 
         <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
+            <table className="w-full min-w-[700px]">
               <thead className="bg-white/10">
                 <tr>
                   <th className="px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">ID</th>
                   <th className="px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">Name</th>
-                  <th className="px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">Subject</th>
                   <th className="hidden md:table-cell px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">Qualification</th>
-                  <th className="hidden lg:table-cell px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">Class</th>
-                  <th className="hidden lg:table-cell px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">Section 1</th>
-                  <th className="hidden xl:table-cell px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">Section 2</th>
+                  <th className="px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">Assignments</th>
                   <th className="px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">Role</th>
                   <th className="hidden lg:table-cell px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">Phone</th>
                   <th className="hidden xl:table-cell px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">Email</th>
@@ -225,29 +239,23 @@ export default function TeachersPage() {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {loading ? (
-                  <tr><td colSpan={12} className="text-center py-8 text-white/60">Loading...</td></tr>
+                  <tr><td colSpan={9} className="text-center py-8 text-white/60">Loading...</td></tr>
                 ) : filteredTeachers.length === 0 ? (
-                  <tr><td colSpan={12} className="text-center py-8 text-white/60">{searchTerm ? 'No teachers match your search' : 'No teachers found'}</td></tr>
+                  <tr><td colSpan={9} className="text-center py-8 text-white/60">{searchTerm ? 'No teachers match your search' : 'No teachers found'}</td></tr>
                 ) : (
                   filteredTeachers.map((teacher, idx) => {
-                    const isActive = teacher.status === 'Active' || teacher.is_active === true;
-                    const teacherKey = teacher.teacher_id || teacher.id;
+                    const isActive = teacher.is_active === true;
+                    const hasInactiveNull = teacher.is_active === null || teacher.is_active === undefined;
                     return (
-                    <tr key={teacherKey || idx} className="border-t border-white/10 hover:bg-white/5">
-                      <td className="px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm whitespace-nowrap">{teacher.teacher_id || teacher.id || '-'}</td>
+                    <tr key={teacher.id || teacher.teacher_id || idx} className="border-t border-white/10 hover:bg-white/5">
+                      <td className="px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm whitespace-nowrap">{teacher.id || teacher.teacher_id || '-'}</td>
                       <td className="px-3 sm:px-4 py-3 text-white text-xs sm:text-sm font-medium">{teacher.name || teacher.full_name || '-'}</td>
-                      <td className="px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">{teacher.subject || teacher.subject_name || '-'}</td>
                       <td className="hidden md:table-cell px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">{teacher.qualification || '-'}</td>
-                      <td className="hidden lg:table-cell px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">
-                        {teacher.class_id
-                          ? formatClassName(
-                              availableClasses.find(c => String(c.class_id) === String(teacher.class_id))?.class_name
-                              || teacher.class_id
-                           )
-                          : '-'}
+                      <td className="px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">
+                        <div className="max-w-md break-words">
+                          {formatAllAssignments(teacher.assignments)}
+                        </div>
                       </td>
-                      <td className="hidden lg:table-cell px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">{teacher.section_1 || '-'}</td>
-                      <td className="hidden xl:table-cell px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">{teacher.section_2 || '-'}</td>
                       <td className="px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">{teacher.role || 'Teacher'}</td>
                       <td className="hidden lg:table-cell px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm whitespace-nowrap">{teacher.contact || teacher.phone || '-'}</td>
                       <td className="hidden xl:table-cell px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">{teacher.email || teacher.email_id || '-'}</td>
@@ -273,14 +281,14 @@ export default function TeachersPage() {
                             <Eye size={16} />
                           </button>
                           <button
-                            onClick={() => router.push(`/admin/teachers/${encodeURIComponent(teacherKey)}/edit`)}
+                            onClick={() => router.push(`/admin/teachers/${encodeURIComponent(teacher.teacher_id || teacher.id)}/edit`)}
                             className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition"
                             title="Modify"
                           >
                             <Pencil size={16} />
                           </button>
                           <button
-                            onClick={() => handleDelete(teacherKey)}
+                            onClick={() => handleDelete(teacher.id || teacher.teacher_id)}
                             className="p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
                             title="Delete"
                           >
@@ -318,35 +326,22 @@ export default function TeachersPage() {
             fields: [
               { label: 'Teacher ID', value: viewTeacher.teacher_id || viewTeacher.id },
               { label: 'Name', value: viewTeacher.name || viewTeacher.full_name },
-              { label: 'Subject', value: viewTeacher.subject || viewTeacher.subject_name },
               { label: 'Qualification', value: viewTeacher.qualification },
               { label: 'Role', value: viewTeacher.role },
-              { label: 'Status', value: viewTeacher.status },
+              { label: 'Status', value: viewTeacher.is_active === true ? 'Active' : 'Inactive' },
               { label: 'Phone', value: viewTeacher.contact || viewTeacher.phone },
               { label: 'Email', value: viewTeacher.email || viewTeacher.email_id },
             ],
           },
           {
-            title: 'Class Assignment',
-            fields: [
-              { label: 'Class', value: viewTeacher.class_id
-                  ? formatClassName(
-                      availableClasses.find(c => String(c.class_id) === String(viewTeacher.class_id))?.class_name
-                      || viewTeacher.class_id
-                    )
-                  : '' },
-              { label: 'Section 1', value: viewTeacher.section_1 },
-              { label: 'Section 2', value: viewTeacher.section_2 },
-              { label: 'Class Teacher', value: viewTeacher.is_class_teacher ? 'Yes' : 'No' },
-            ],
-          },
-          {
-            title: 'Subjects Taught',
-            fields: [
-              { label: 'Subjects', value: Array.isArray(viewTeacher.subjects)
-                  ? viewTeacher.subjects.join(', ')
-                  : viewTeacher.subjects, fullWidth: true },
-            ],
+            title: 'Class Assignments',
+            fields: (viewTeacher.assignments && viewTeacher.assignments.length > 0)
+              ? viewTeacher.assignments.map((a, i) => ({
+                  label: `Assignment ${i + 1}`,
+                  value: formatAssignment(a),
+                  fullWidth: true,
+                }))
+              : [{ label: 'Assignments', value: 'None', fullWidth: true }],
           },
         ] : []}
         onClose={() => setViewTeacher(null)}
