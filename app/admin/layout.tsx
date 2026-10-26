@@ -9,7 +9,8 @@ import {
   Settings,
   Menu,
   X,
-  LogOut
+  LogOut,
+  Calendar // ✅ Added Calendar icon
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -46,7 +47,9 @@ export default function AdminLayout({
   const menuItems = [
     { id: 'teachers', name: 'Teachers', icon: BookOpen, path: '/admin/teachers', color: 'from-green-500 to-emerald-500' },
     { id: 'students', name: 'Students', icon: Users, path: '/admin/students', color: 'from-blue-500 to-cyan-500' },
-    { id: 'others', name: 'Others', icon: Settings, path: '/admin/others',color: 'from-purple-500 to-pink-500' },
+    // ✅ Added Timetable to the menu
+    { id: 'timetable', name: 'Timetable', icon: Calendar, path: '/admin/timetable', color: 'from-orange-500 to-red-500' },
+    { id: 'others', name: 'Others', icon: Settings, path: '/admin/others', color: 'from-purple-500 to-pink-500' },
   ];
 
   // Shared sidebar content (used by both desktop rail and mobile drawer)
