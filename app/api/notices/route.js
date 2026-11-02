@@ -1,11 +1,19 @@
 import { NextResponse } from 'next/server';
 import { sql } from '../../../lib/db';
+import { verifyAdminToken } from '../../../lib/auth-verify'; // ✅ Import helper
 
 // ============================================================================
 // GET — return BOTH Active + Inactive (so the toggle is possible)
 // ============================================================================
 
-export async function GET() {
+export async function GET(request) {
+  // ✅ Verify token first
+  const auth = verifyAdminToken(request);
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error }, { status: 401 });
+  }
+
+s
   try {
     const notices = await sql`
       SELECT 

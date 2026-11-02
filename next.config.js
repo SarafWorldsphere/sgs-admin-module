@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  assetPrefix: '/admin',
+ basePath: '/admin',
+ // assetPrefix: '/admin',
   reactStrictMode: true,
   // Ignore warnings from jsonwebtoken (Node.js APIs not available in Edge)
   webpack: (config, { isServer }) => {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '../../../lib/db';
+import { verifyAdminToken } from '../../../lib/auth-verify'; // ✅ Import helper
 
 // ---- Helpers -----------------------------------------------------------
 
@@ -130,7 +131,12 @@ async function replaceTeacherClassMap(tx, teacherId, rows) {
 //   map rows yet.
 // ============================================================================
 
-export async function GET() {
+export async function GET(request) {
+   // ✅ Verify token first
+  const auth = verifyAdminToken(request);
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error }, { status: 401 });
+  }
   try {
     const teachers = await sql`
       SELECT 
@@ -231,6 +237,11 @@ export async function GET() {
 // ============================================================================
 
 export async function POST(request) {
+   // ✅ Verify token first
+  const auth = verifyAdminToken(request);
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error }, { status: 401 });
+  }
   try {
     const body = await request.json();
     const {
@@ -351,6 +362,11 @@ export async function POST(request) {
 // ============================================================================
 
 export async function PUT(request) {
+   // ✅ Verify token first
+  const auth = verifyAdminToken(request);
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error }, { status: 401 });
+  }
   try {
     const body = await request.json();
     const { teacher_id, status } = body;
@@ -480,6 +496,11 @@ export async function PUT(request) {
 // ============================================================================
 
 export async function DELETE(request) {
+   // ✅ Verify token first
+  const auth = verifyAdminToken(request);
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error }, { status: 401 });
+  }
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

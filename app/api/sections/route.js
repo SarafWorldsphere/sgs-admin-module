@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sql } from '../../../lib/db';
 
+
 // GET /api/sections?class_id=18
 // Returns distinct sections that actually have students in this class.
 // Falls back to the class_master.section_name if no students yet.

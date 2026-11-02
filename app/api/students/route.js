@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '../../../lib/db';
-
+import { verifyAdminToken } from '../../../lib/auth-verify'; // ✅ Import helper
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -120,6 +120,11 @@ async function reconcileParents(tx, studentId, parents) {
 // ============================================================================
 
 export async function GET() {
+    // ✅ Verify token first
+  const auth = verifyAdminToken(request);
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error }, { status: 401 });
+  }
   try {
     const students = await sql`
       SELECT 
