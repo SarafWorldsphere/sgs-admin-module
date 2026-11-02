@@ -5,19 +5,26 @@ export function middleware(request) {
   
   const loginPortalUrl = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL || 'https://staging.sgs.swais.in/login';
 
-  // 1. Handle portal redirect token
+  // 1. If portal redirects with ?token=..., save it and clean URL
   const urlToken = searchParams.get('token');
   if (urlToken) {
     const response = NextResponse.redirect(new URL(pathname, request.url));
-    response.cookies.set('admin_token', urlToken, { httpOnly: true, path: '/', maxAge: 86400 });
+    response.cookies.set('admin_token', urlToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 24,
+    });
     return response;
   }
 
-  // 2. Check for existing token
-  const token = request.cookies.get('admin_token')?.value 
-             || request.headers.get('authorization')?.replace('Bearer ', '');
+  // 2. Check for existing token in cookie or header
+  const cookieToken = request.cookies.get('admin_token')?.value;
+  const authHeader = request.headers.get('authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const token = cookieToken || bearerToken;
 
-  // 3. If no token, bounce to the portal
+  // 3. Redirect to portal if no token
   if (!token) {
     return NextResponse.redirect(loginPortalUrl);
   }
@@ -26,5 +33,8 @@ export function middleware(request) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/:path*'],
+  matcher: [
+    // Protect everything under /admin and /api
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
 };

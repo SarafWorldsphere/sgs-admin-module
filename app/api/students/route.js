@@ -154,6 +154,11 @@ export async function GET() {
 // ============================================================================
 
 export async function POST(request) {
+   // ✅ Verify token first
+  const auth = verifyAdminToken(request);
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error }, { status: 401 });
+  }
   try {
     const body = await request.json();
     const {
@@ -252,6 +257,12 @@ export async function POST(request) {
 // ============================================================================
 
 export async function PUT(request) {
+  // ✅ Verify token first
+  const auth = verifyAdminToken(request);
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const { admission_no, status } = body;
@@ -369,6 +380,12 @@ export async function PUT(request) {
 // ============================================================================
 
 export async function DELETE(request) {
+  // ✅ Verify token first
+  const auth = verifyAdminToken(request);
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error }, { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
