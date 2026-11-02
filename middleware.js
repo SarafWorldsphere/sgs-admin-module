@@ -1,13 +1,43 @@
 import { NextResponse } from 'next/server';
 
-// Temporarily disable middleware for testing
 export function middleware(request) {
-  // Allow all access - no redirects
+  const { pathname, searchParams } = request.nextUrl;
+
+  // 1. The full URL of the external login portal
+  // Make sure NEXT_PUBLIC_LOGIN_PORTAL_URL is set in your .env.local and EC2 .env
+  const loginPortalUrl = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL || 'https://staging.sgs.swais.in/login';
+
+  // 2. Handle incoming token from the portal (?token=...)
+  const urlToken = searchParams.get('token');
+  if (urlToken) {
+    const response = NextResponse.redirect(new URL(pathname, request.url));
+    response.cookies.set('admin_token', urlToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 24,
+    });
+    return response;
+  }
+
+  // 3. Check for existing token in cookie or Authorization header
+  const cookieToken = request.cookies.get('admin_token')?.value;
+  const authHeader = request.headers.get('authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const token = cookieToken || bearerToken;
+
+  // 4. If no token, redirect to the EXTERNAL login portal
+  if (!token) {
+    // NextResponse.redirect requires an absolute URL
+    return NextResponse.redirect(loginPortalUrl);
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
+    // Protect all admin pages
     '/admin/:path*',
   ],
 };

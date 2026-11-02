@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react';
 import {
   Bell, Calendar, Plus, Search, Edit2, Trash2,
-  X, Megaphone, CalendarPlus
+  X, Megaphone, CalendarPlus, Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../../../components/ConfirmModal';
 import AlertModal from '../../../components/AlertModal';
+import NotificationViewModal from '../../../components/NotificationViewModal';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
 
@@ -26,6 +27,9 @@ export default function OthersPage() {
   const [validationError, setValidationError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [alertState, setAlertState] = useState({ isOpen: false, title: '', message: '', variant: 'error' });
+  
+  // ✅ NEW: State for the full view modal
+  const [viewItem, setViewItem] = useState(null);
 
   const showAlert = (message, variant = 'error', title = 'Error') =>
     setAlertState({ isOpen: true, title, message, variant });
@@ -49,7 +53,6 @@ export default function OthersPage() {
     try {
       const response = await fetch(`${API_BASE_URL}/notices`);
       if (!response.ok) {
-        console.error('Notices API returned:', response.status);
         setNotifications([]);
         return;
       }
@@ -65,7 +68,6 @@ export default function OthersPage() {
     try {
       const response = await fetch(`${API_BASE_URL}/events`);
       if (!response.ok) {
-        console.error('Events API returned:', response.status);
         setEvents([]);
         return;
       }
@@ -120,7 +122,7 @@ export default function OthersPage() {
   const handleAdd = async () => {
     if (!validateForm()) return;
     const apiEndpoint = modalFor === 'notice' ? 'notices' : 'events';
-    const payload : any = {
+    const payload: any = {
       title: formData.title,
       message: formData.message,
       date: formData.date,
@@ -153,7 +155,6 @@ export default function OthersPage() {
     }
   };
 
-  // ✅ Status toggle — same pattern as students/teachers
   const handleToggleStatus = async (item) => {
     const isNotice = activeTab === 'notifications';
     const itemType = isNotice ? 'notice' : 'event';
@@ -161,7 +162,6 @@ export default function OthersPage() {
     const currentStatus = item.status || 'Active';
     const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
 
-    // Optimistic update
     const updateList = (list) =>
       list.map((it) =>
         it.id === item.id ? { ...it, status: newStatus } : it
@@ -176,7 +176,6 @@ export default function OthersPage() {
         body: JSON.stringify({ id: item.id, status: newStatus }),
       });
       if (!response.ok) {
-        // Revert
         const revert = (list) =>
           list.map((it) =>
             it.id === item.id ? { ...it, status: currentStatus } : it
@@ -187,7 +186,6 @@ export default function OthersPage() {
         showAlert(err.error || `Failed to update ${itemType} status`, 'error', 'Update Failed');
         return;
       }
-      // Refresh from server to confirm
       if (isNotice) fetchNotifications();
       else fetchEvents();
     } catch (error) {
@@ -382,7 +380,6 @@ export default function OthersPage() {
                       <td className="px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm whitespace-nowrap">{formatDate(item.date)}</td>
                       <td className="hidden sm:table-cell px-3 sm:px-4 py-3 text-white/80 text-xs sm:text-sm">{item.applicable_class || 'all'}</td>
                       <td className="px-3 sm:px-4 py-3">
-                        {/* ✅ Toggle button — same UX as students/teachers */}
                         <button
                           onClick={() => handleToggleStatus(item)}
                           className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap transition cursor-pointer ${
@@ -396,6 +393,14 @@ export default function OthersPage() {
                       </td>
                       <td className="px-3 sm:px-4 py-3">
                         <div className="flex gap-1.5 sm:gap-2">
+                          {/* ✅ NEW: View button */}
+                          <button
+                            onClick={() => setViewItem(item)}
+                            className="p-1.5 rounded-lg bg-gray-500/20 text-gray-300 hover:bg-gray-500/30 transition"
+                            title="View details"
+                          >
+                            <Eye size={16} />
+                          </button>
                           <button
                             onClick={() => openModal('modify', item, activeTab === 'notifications' ? 'notice' : 'event')}
                             className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition"
@@ -545,6 +550,13 @@ export default function OthersPage() {
         variant="danger"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* ✅ NEW: Full View Modal */}
+      <NotificationViewModal
+        isOpen={!!viewItem}
+        notification={viewItem}
+        onClose={() => setViewItem(null)}
       />
 
       <AlertModal
