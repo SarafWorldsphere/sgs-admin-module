@@ -2,12 +2,11 @@ import { NextResponse } from 'next/server';
 
 export function middleware(request) {
   const { pathname, searchParams } = request.nextUrl;
-
-  // 1. The full URL of the external login portal
-  // Make sure NEXT_PUBLIC_LOGIN_PORTAL_URL is set in your .env.local and EC2 .env
+  
+  // 1. Full login portal URL
   const loginPortalUrl = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL || 'https://staging.sgs.swais.in/login';
 
-  // 2. Handle incoming token from the portal (?token=...)
+  // 2. Capture the token from the portal redirect (?token=...)
   const urlToken = searchParams.get('token');
   if (urlToken) {
     const response = NextResponse.redirect(new URL(pathname, request.url));
@@ -20,15 +19,14 @@ export function middleware(request) {
     return response;
   }
 
-  // 3. Check for existing token in cookie or Authorization header
+  // 3. Check for existing token
   const cookieToken = request.cookies.get('admin_token')?.value;
   const authHeader = request.headers.get('authorization');
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
   const token = cookieToken || bearerToken;
 
-  // 4. If no token, redirect to the EXTERNAL login portal
+  // 4. If no token, redirect to the external login portal
   if (!token) {
-    // NextResponse.redirect requires an absolute URL
     return NextResponse.redirect(loginPortalUrl);
   }
 
