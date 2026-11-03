@@ -3,10 +3,9 @@ import { NextResponse } from 'next/server';
 export function middleware(request) {
   const { pathname, searchParams } = request.nextUrl;
   
-  // ✅ Use the absolute URL. Do not use relative paths here.
-  const loginPortalUrl = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL || 'https://staging.sgs.swais.in';
+  const loginPortalUrl = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL || 'https://staging.sgs.swais.in/login';
 
-  // 1. Handle incoming token from the portal
+  // 1. Capture token from portal
   const urlToken = searchParams.get('token');
   if (urlToken) {
     const response = NextResponse.redirect(new URL(pathname, request.url));
@@ -19,7 +18,7 @@ export function middleware(request) {
     return response;
   }
 
-  // 2. Check for token in cookies or headers
+  // 2. Check for token
   const cookieToken = request.cookies.get('admin_token')?.value;
   const authHeader = request.headers.get('authorization');
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -27,7 +26,6 @@ export function middleware(request) {
 
   // 3. Redirect to portal if no token
   if (!token) {
-    // We use NextResponse.redirect with a full string URL
     return NextResponse.redirect(loginPortalUrl);
   }
 
@@ -36,7 +34,13 @@ export function middleware(request) {
 
 export const config = {
   matcher: [
-    // Only protect the /admin routes
-    '/admin/:path*',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 };
