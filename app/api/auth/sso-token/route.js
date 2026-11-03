@@ -19,7 +19,6 @@ import jwt from 'jsonwebtoken';
  * lib/auth.js verifies a token from either source identically.
  */
 
-const ADMIN_ROLES = ['admin', 'super_admin'];
 
 export async function POST(request) {
   // Both secrets are required rather than defaulted. A fallback here would mean
@@ -60,15 +59,18 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Phone number is not valid' }, { status: 400 });
     }
 
+    // Column names are the ones this table actually has: email_id, mobile_no,
+    // login_id, full_name. Not email/username/role — those belong to a schema
+    // this app was written against and never had here.
     const users = email
       ? await sql`
-          SELECT user_id, username, email, role, is_active
+          SELECT user_id, login_id, full_name, email_id, role_id, is_active
           FROM sgs_users_masters
-          WHERE lower(email) = lower(${String(email).trim()})
+          WHERE lower(email_id) = lower(${String(email).trim()})
           LIMIT 1
         `
       : await sql`
-          SELECT user_id, username, email, role, is_active
+          SELECT user_id, login_id, full_name, email_id, role_id, is_active
           FROM sgs_users_masters
           WHERE right(regexp_replace(coalesce(mobile_no, ''), '[^0-9]', '', 'g'), 10) = ${last10}
           LIMIT 1
@@ -84,15 +86,17 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Account is deactivated' }, { status: 403 });
     }
 
-    // The portal asked for a School Admin token; issuing one to a teacher or a
-    // parent because they happen to have an account would hand them the admin
-    // dashboard.
-    if (!ADMIN_ROLES.includes(user.role)) {
-      return NextResponse.json({ error: 'Not an admin account' }, { status: 403 });
-    }
-
+    // Membership of sgs_users_masters IS the rule, which is what the login
+    // portal's own role mapping uses for School Admin. There is deliberately no
+    // role check here because there is nothing to check against: role_id is
+    // null for 28 of the 30 rows and no lookup table defines what 8 or 9 mean.
+    //
+    // That is weaker than it should be — a headmaster resolves through the same
+    // table — and it should become a real role check once role_id is populated.
+    // Tightening it here alone would simply lock everyone out while the portal
+    // kept admitting them.
     const access_token = jwt.sign(
-      { userId: user.user_id, email: user.email, role: user.role },
+      { userId: user.user_id, email: user.email_id, role: 'admin' },
       jwtSecret,
       { expiresIn: '7d' }
     );
@@ -101,9 +105,10 @@ export async function POST(request) {
       access_token,
       user: {
         id: user.user_id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
+        username: user.login_id,
+        name: user.full_name,
+        email: user.email_id,
+        role: 'admin',
       },
     });
   } catch (error) {
