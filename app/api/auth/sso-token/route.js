@@ -40,21 +40,42 @@ export async function POST(request) {
   }
 
   try {
-    const { email } = await request.json();
+    const { email, phone } = await request.json();
 
-    if (!email || typeof email !== 'string') {
-      return NextResponse.json({ error: 'Email required' }, { status: 400 });
+    // The portal sends whichever identifier was verified: Google login gives an
+    // email, OTP login gives a phone. Requiring email would reject every admin
+    // who signed in with a phone number.
+    if (!email && !phone) {
+      return NextResponse.json({ error: 'Email or phone required' }, { status: 400 });
     }
 
-    const users = await sql`
-      SELECT user_id, username, email, role, is_active
-      FROM sgs_users_masters
-      WHERE lower(email) = lower(${email.trim()})
-      LIMIT 1
-    `;
+    // Phone numbers are stored inconsistently — with and without the country
+    // code — so match on the last ten digits rather than the raw string. The
+    // character class is written [^0-9] rather than \D: a backslash escape in
+    // a template literal is swallowed by JavaScript before Postgres sees it.
+    const digits = String(phone || '').replace(/[^0-9]/g, '');
+    const last10 = digits.length >= 10 ? digits.slice(-10) : null;
+
+    if (!email && !last10) {
+      return NextResponse.json({ error: 'Phone number is not valid' }, { status: 400 });
+    }
+
+    const users = email
+      ? await sql`
+          SELECT user_id, username, email, role, is_active
+          FROM sgs_users_masters
+          WHERE lower(email) = lower(${String(email).trim()})
+          LIMIT 1
+        `
+      : await sql`
+          SELECT user_id, username, email, role, is_active
+          FROM sgs_users_masters
+          WHERE right(regexp_replace(coalesce(mobile_no, ''), '[^0-9]', '', 'g'), 10) = ${last10}
+          LIMIT 1
+        `;
 
     if (users.length === 0) {
-      return NextResponse.json({ error: 'No admin found for this email' }, { status: 404 });
+      return NextResponse.json({ error: 'No admin found for this account' }, { status: 404 });
     }
 
     const user = users[0];
