@@ -13,13 +13,12 @@ const iconForBreak = (label) => {
   return Clock;
 };
 
-export default function TimetableGrid({ timetable, assignments, onGridChange }) {
+export default function TimetableGrid({ timetable, assignments, onGridChange, isReadOnly = false }) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerCell, setPickerCell] = useState(null); // { day_of_week, period_no, current }
+  const [pickerCell, setPickerCell] = useState(null);
 
   const { periods, days } = timetable;
 
-  // Build a lookup: day + period -> slot
   const slotLookup = new Map();
   for (const day of days) {
     for (const slot of day.slots) {
@@ -28,34 +27,31 @@ export default function TimetableGrid({ timetable, assignments, onGridChange }) 
   }
 
   const openPicker = (dayOfWeek, periodNo) => {
+    if (isReadOnly) return;
     const current = slotLookup.get(`${dayOfWeek}::${periodNo}`) || null;
     setPickerCell({ day_of_week: dayOfWeek, period_no: periodNo, current });
     setPickerOpen(true);
   };
 
-  const handlePickerSave = (subjectName, teacherId) => {
+  const handlePickerSave = (subjectName, teacherId, activityType) => {
     if (!pickerCell) return;
     const { day_of_week, period_no } = pickerCell;
 
-    // Build the new timetable structure
     const newDays = days.map((day) => {
       if (day.day_of_week !== day_of_week) return day;
 
       const existing = slotLookup.get(`${day_of_week}::${period_no}`);
       let newSlots;
-      if (!subjectName || !teacherId) {
-        // Remove the slot
+      if (!subjectName) {
         newSlots = day.slots.filter((s) => s.period_no !== period_no);
       } else if (existing) {
-        // Update the slot
         newSlots = day.slots.map((s) =>
-          s.period_no === period_no ? { ...s, subject_name: subjectName, teacher_id: teacherId } : s
+          s.period_no === period_no ? { ...s, subject_name: subjectName, teacher_id: teacherId, activity_type: activityType } : s
         );
       } else {
-        // Add the slot
         newSlots = [
           ...day.slots,
-          { period_no, subject_name: subjectName, teacher_id: teacherId },
+          { period_no, subject_name: subjectName, teacher_id: teacherId, activity_type: activityType },
         ];
       }
       return { ...day, slots: newSlots };
@@ -106,28 +102,36 @@ export default function TimetableGrid({ timetable, assignments, onGridChange }) 
                     ) : (
                       [1, 2, 3, 4, 5, 6].map((dow) => {
                         const slot = slotLookup.get(`${dow}::${p.period_no}`);
-                        const teacherName = slot
-                          ? assignments.find((a) => a.teacher_id === slot.teacher_id)?.teacher_name
-                          : null;
+                        
+                        // For teacher view, we show class name. For class view, we show teacher name.
+                        const subtext = slot?.teacher_name 
+                          ? `${slot.teacher_name}`
+                          : slot?.class_name ? `${slot.class_name} ${slot.section}` : slot?.teacher_id;
+
                         return (
                           <td key={dow} className="px-2 py-2 align-top">
                             <button
                               onClick={() => openPicker(dow, p.period_no)}
+                              disabled={isReadOnly && !slot}
                               className={`w-full text-left px-2 py-1.5 rounded text-xs transition min-h-[48px] ${
                                 slot
-                                  ? 'bg-blue-500/20 border border-blue-500/40 text-white hover:bg-blue-500/30'
-                                  : 'bg-white/5 border border-white/10 text-white/40 hover:bg-white/10 hover:text-white/70 italic'
-                              }`}
+                                  ? slot.activity_type 
+                                    ? 'bg-purple-500/20 border border-purple-500/40 text-white'
+                                    : 'bg-blue-500/20 border border-blue-500/40 text-white'
+                                  : 'bg-white/5 border border-white/10 text-white/40 hover:bg-white/10'
+                              } ${isReadOnly ? 'cursor-default' : 'hover:opacity-80'}`}
                             >
                               {slot ? (
                                 <div>
                                   <div className="font-medium truncate">{slot.subject_name}</div>
-                                  <div className="text-[10px] text-white/60 truncate flex items-center gap-1">
-                                    <Users size={9} /> {teacherName || slot.teacher_id}
-                                  </div>
+                                  {subtext && (
+                                    <div className="text-[10px] text-white/60 truncate flex items-center gap-1">
+                                      <Users size={9} /> {subtext}
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
-                                '+ add'
+                                !isReadOnly && '+ add'
                               )}
                             </button>
                           </td>
@@ -142,10 +146,12 @@ export default function TimetableGrid({ timetable, assignments, onGridChange }) 
         </div>
       </div>
 
-      <div className="mt-4 text-xs text-white/50 flex items-center gap-4">
-        <span>● Click any teaching cell to assign a subject and teacher.</span>
-        <span>● Breaks and assembly are shown for reference.</span>
-      </div>
+      {!isReadOnly && (
+        <div className="mt-4 text-xs text-white/50 flex flex-wrap items-center gap-4">
+          <span>● Click any teaching cell to assign a subject or activity.</span>
+          <span>● Breaks and assembly are shown for reference.</span>
+        </div>
+      )}
 
       {pickerOpen && pickerCell && (
         <TimetableCellPicker
@@ -153,10 +159,7 @@ export default function TimetableGrid({ timetable, assignments, onGridChange }) 
           cell={pickerCell}
           assignments={assignments}
           onSave={handlePickerSave}
-          onCancel={() => {
-            setPickerOpen(false);
-            setPickerCell(null);
-          }}
+          onCancel={() => { setPickerOpen(false); setPickerCell(null); }}
         />
       )}
     </>

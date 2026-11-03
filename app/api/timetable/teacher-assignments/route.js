@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '../../../../lib/db';
+import { verifyAdminToken } from '../../../../lib/auth-verify'; // ✅ Import
 
 // ============================================================================
 // GET /api/timetable/teacher-assignments
@@ -16,6 +17,9 @@ import { sql } from '../../../../lib/db';
 // ============================================================================
 
 export async function GET(request) {
+    // ✅ Verify token
+  const auth = verifyAdminToken(request);
+  if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
   try {
     const { searchParams } = new URL(request.url);
     const classIdParam = searchParams.get('class_id');
