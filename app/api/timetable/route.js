@@ -22,7 +22,7 @@ export async function GET(request) {
 
     // 1. Get periods
     const periodRows = await sql`
-      SELECT period_no, period_label, start_time, end_time, is_teaching
+      SELECT period_id, period_no, period_label, start_time, end_time, is_teaching
       FROM sgs_period_master
       WHERE academic_year = ${academicYear} AND schedule_type = 'full'
         AND (record_status IS NULL OR record_status = 'Active')
@@ -71,6 +71,7 @@ export async function GET(request) {
     return NextResponse.json({
       academic_year: academicYear, class_id: classId, section, schedule_type: 'full',
       periods: periodRows.map((p) => ({
+        period_id: p.period_id,
         period_no: p.period_no, label: p.period_label,
         start_time: p.start_time ? String(p.start_time).slice(0, 5) : null,
         end_time: p.end_time ? String(p.end_time).slice(0, 5) : null,

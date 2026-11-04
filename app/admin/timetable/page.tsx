@@ -101,6 +101,40 @@ export default function TimetablePage() {
     setHasUnsavedChanges(true);
   };
 
+  // ✅ NEW: Handle Adding and Deleting Periods
+  const handlePeriodChange = async (action, data) => {
+    try {
+      if (action === 'add') {
+        const res = await fetch(`${API_BASE_URL}/timetable/periods`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            academic_year: DEFAULT_YEAR, 
+            label: data.label, start_time: data.start_time, end_time: data.end_time 
+          }),
+        });
+        const resData = await res.json();
+        if (!res.ok) return showAlert(resData.error, 'error');
+        
+        // Refresh timetable to get the new row
+        const refreshRes = await fetch(`${API_BASE_URL}/timetable?class_id=${selectedClass}&section=${selectedSection}&academic_year=${DEFAULT_YEAR}`);
+        setTimetable(await refreshRes.json());
+        showAlert('Period added. Don\'t forget to save your timetable.', 'success', 'Period Added');
+        
+      } else if (action === 'delete') {
+        const res = await fetch(`${API_BASE_URL}/timetable/periods?id=${data.periodId}`, { method: 'DELETE' });
+        const resData = await res.json();
+        if (!res.ok) return showAlert(resData.error, 'error');
+        
+        // Refresh timetable
+        const refreshRes = await fetch(`${API_BASE_URL}/timetable?class_id=${selectedClass}&section=${selectedSection}&academic_year=${DEFAULT_YEAR}`);
+        setTimetable(await refreshRes.json());
+        showAlert('Period deleted.', 'success', 'Deleted');
+      }
+    } catch (err) {
+      showAlert('Network error. Please try again.', 'error');
+    }
+  };
+
   const handleSave = async () => {
     if (!timetable || viewMode !== 'class') return;
     const slots = [];
@@ -133,16 +167,14 @@ export default function TimetablePage() {
     } catch (err) { showAlert('Network error.', 'error'); } finally { setSaving(false); }
   };
 
-  // ✅ NEW: EXPORT TO EXCEL
   const handleExport = async () => {
     if (!timetable || viewMode !== 'class') return;
     const XLSX = await import('xlsx');
 
-    // Build a 2D array: Row 0 = Headers (Period, Mon, Tue...), Row 1+ = Data
     const rows = [['Period', ...DAYS]];
     
     for (const p of timetable.periods) {
-      if (!p.is_teaching) continue; // Skip breaks for a cleaner export
+      if (!p.is_teaching) continue; 
       
       const row = [`${p.label} (${p.start_time})`];
       for (let i = 1; i <= 6; i++) {
@@ -151,7 +183,6 @@ export default function TimetablePage() {
         
         if (slot) {
           const teacher = assignments.find(a => a.teacher_id === slot.teacher_id)?.teacher_name || slot.teacher_id;
-          // Format: "Maths (Mr. Smith)"
           row.push(`${slot.subject_name} (${teacher})`);
         } else {
           row.push('');
@@ -168,64 +199,51 @@ export default function TimetablePage() {
     XLSX.writeFile(workbook, `Timetable_${className}_${selectedSection}.xlsx`);
   };
 
-  // ✅ NEW: IMPORT FROM EXCEL
   const handleImport = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !timetable) return;
     
-    // Reset the input so the same file can be uploaded again if needed
     e.target.value = '';
 
     const XLSX = await import('xlsx');
     const data = await file.arrayBuffer();
     const workbook = XLSX.read(data);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // 2D array
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
     if (rows.length < 2) return showAlert('Excel file is empty or invalid format.', 'error');
 
-    // We assume Row 0 is header (Period, Mon, Tue...), Row 1+ is data
     const newTimetable = { ...timetable };
     
-    // Map the Excel row data back to the grid structure
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r];
-      const periodLabel = row[0]; // e.g., "1st Period (09:15)"
+      const periodLabel = row[0]; 
       
-      // Find which period_no this matches
       const period = timetable.periods.find(p => periodLabel && periodLabel.includes(p.label));
       if (!period) continue;
 
-      for (let c = 1; c <= 6; c++) { // 1=Mon, 6=Sat
+      for (let c = 1; c <= 6; c++) { 
         const cellValue = row[c];
         if (!cellValue) continue;
 
-        // Parse the cell value, e.g., "Maths (Mr. Smith)" or "GAMES"
         let subject = cellValue;
-        let teacherId = 'ACTIVITY'; // Default for games/lib
+        let teacherId = 'ACTIVITY'; 
         let activityType = null;
 
-        // If it has parentheses, extract teacher name (but we need ID, so we do a best-effort match)
         if (cellValue.includes('(')) {
           const match = cellValue.match(/(.+)\((.+)\)/);
           if (match) {
             subject = match[1].trim();
             const teacherName = match[2].trim();
-            // Try to find the teacher ID by name in assignments
             const assign = assignments.find(a => a.teacher_name === teacherName || a.teacher_id === teacherName);
-            if (assign) {
-              teacherId = assign.teacher_id;
-            } else {
-              teacherId = 'UNKNOWN'; // Will require manual fix
-            }
+            if (assign) { teacherId = assign.teacher_id; } 
+            else { teacherId = 'UNKNOWN'; }
           }
         } else {
-          // Could be an activity (GAMES, LIBRARY)
           const act = ['GAMES', 'LIBRARY', 'LAB'].find(a => subject.toUpperCase().includes(a));
           if (act) activityType = act.toLowerCase();
         }
 
-        // Update the specific day/period slot
         const dayIndex = newTimetable.days.findIndex(d => d.day_of_week === c);
         if (dayIndex !== -1) {
           const existingSlotIndex = newTimetable.days[dayIndex].slots.findIndex(s => s.period_no === period.period_no);
@@ -318,7 +336,13 @@ export default function TimetablePage() {
             <RefreshCw className="animate-spin" size={20} /> Loading timetable…
           </div>
         ) : timetable ? (
-          <TimetableGrid timetable={timetable} assignments={assignments} onGridChange={handleGridChange} isReadOnly={viewMode === 'teacher'} />
+          <TimetableGrid 
+            timetable={timetable} 
+            assignments={assignments} 
+            onGridChange={handleGridChange} 
+            isReadOnly={viewMode === 'teacher'} 
+            onPeriodChange={handlePeriodChange} // ✅ NEW PROP
+          />
         ) : null}
       </div>
 
