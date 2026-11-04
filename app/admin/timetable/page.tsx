@@ -71,9 +71,12 @@ export default function TimetablePage() {
           ]);
           const ttData = await ttRes.json();
           const asData = await asRes.json();
+          
+          if (!ttData || ttData.error) throw new Error(ttData?.error || 'Failed to load timetable');
+          
           setTimetable(ttData);
           setAssignments(Array.isArray(asData.assignments) ? asData.assignments : []);
-        } catch (err) { showAlert('Could not load timetable.', 'error'); } finally { setLoading(false); }
+        } catch (err) { showAlert(err.message, 'error', 'Load Failed'); } finally { setLoading(false); }
       })();
     } else {
       if (!selectedTeacher) { setTimetable(null); return; }
@@ -82,6 +85,9 @@ export default function TimetablePage() {
         try {
           const res = await fetch(`${API_BASE_URL}/timetable/teacher?teacher_id=${selectedTeacher}&academic_year=${DEFAULT_YEAR}`);
           const data = await res.json();
+          
+          if (!data || data.error) throw new Error(data?.error || 'Failed to load teacher');
+
           const days = [1,2,3,4,5,6].map(dow => ({
             day_of_week: dow,
             day_name: DAYS[dow-1],
@@ -91,7 +97,7 @@ export default function TimetablePage() {
             }))
           }));
           setTimetable({ periods: data.periods, days });
-        } catch (err) { showAlert('Could not load teacher timetable.', 'error'); } finally { setLoading(false); }
+        } catch (err) { showAlert(err.message, 'error', 'Load Failed'); } finally { setLoading(false); }
       })();
     }
   }, [viewMode, selectedClass, selectedSection, selectedTeacher]);
@@ -99,40 +105,6 @@ export default function TimetablePage() {
   const handleGridChange = (newTimetable) => {
     setTimetable(newTimetable);
     setHasUnsavedChanges(true);
-  };
-
-  // ✅ NEW: Handle Adding and Deleting Periods
-  const handlePeriodChange = async (action, data) => {
-    try {
-      if (action === 'add') {
-        const res = await fetch(`${API_BASE_URL}/timetable/periods`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            academic_year: DEFAULT_YEAR, 
-            label: data.label, start_time: data.start_time, end_time: data.end_time 
-          }),
-        });
-        const resData = await res.json();
-        if (!res.ok) return showAlert(resData.error, 'error');
-        
-        // Refresh timetable to get the new row
-        const refreshRes = await fetch(`${API_BASE_URL}/timetable?class_id=${selectedClass}&section=${selectedSection}&academic_year=${DEFAULT_YEAR}`);
-        setTimetable(await refreshRes.json());
-        showAlert('Period added. Don\'t forget to save your timetable.', 'success', 'Period Added');
-        
-      } else if (action === 'delete') {
-        const res = await fetch(`${API_BASE_URL}/timetable/periods?id=${data.periodId}`, { method: 'DELETE' });
-        const resData = await res.json();
-        if (!res.ok) return showAlert(resData.error, 'error');
-        
-        // Refresh timetable
-        const refreshRes = await fetch(`${API_BASE_URL}/timetable?class_id=${selectedClass}&section=${selectedSection}&academic_year=${DEFAULT_YEAR}`);
-        setTimetable(await refreshRes.json());
-        showAlert('Period deleted.', 'success', 'Deleted');
-      }
-    } catch (err) {
-      showAlert('Network error. Please try again.', 'error');
-    }
   };
 
   const handleSave = async () => {
@@ -168,105 +140,118 @@ export default function TimetablePage() {
   };
 
   const handleExport = async () => {
-    if (!timetable || viewMode !== 'class') return;
-    const XLSX = await import('xlsx');
-
-    const rows = [['Period', ...DAYS]];
-    
-    for (const p of timetable.periods) {
-      if (!p.is_teaching) continue; 
+    if (!timetable) return; // SAFETY CHECK
+    try {
+      const XLSX = await import('xlsx');
+      const rows = [['Period', ...DAYS]];
       
-      const row = [`${p.label} (${p.start_time})`];
-      for (let i = 1; i <= 6; i++) {
-        const day = timetable.days.find(d => d.day_of_week === i);
-        const slot = day.slots.find(s => s.period_no === p.period_no);
-        
-        if (slot) {
-          const teacher = assignments.find(a => a.teacher_id === slot.teacher_id)?.teacher_name || slot.teacher_id;
-          row.push(`${slot.subject_name} (${teacher})`);
-        } else {
-          row.push('');
+      for (const p of timetable.periods) {
+        if (!p.is_teaching) continue; 
+        const row = [`${p.label} (${p.start_time})`];
+        for (let i = 1; i <= 6; i++) {
+          const day = timetable.days.find(d => d.day_of_week === i);
+          const slot = day?.slots.find(s => s.period_no === p.period_no);
+          if (slot) {
+            const teacher = assignments.find(a => a.teacher_id === slot.teacher_id)?.teacher_name || slot.teacher_id;
+            row.push(`${slot.subject_name} (${teacher})`);
+          } else {
+            row.push('');
+          }
         }
+        rows.push(row);
       }
-      rows.push(row);
-    }
 
-    const worksheet = XLSX.utils.aoa_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Timetable');
-    
-    const className = classes.find(c => String(c.class_id) === String(selectedClass))?.class_name || selectedClass;
-    XLSX.writeFile(workbook, `Timetable_${className}_${selectedSection}.xlsx`);
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Timetable');
+      
+      const className = classes.find(c => String(c.class_id) === String(selectedClass))?.class_name || selectedClass;
+      XLSX.writeFile(workbook, `Timetable_${className}_${selectedSection}.xlsx`);
+    } catch (err) { showAlert('Export failed.', 'error'); }
   };
 
   const handleImport = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !timetable) return;
-    
     e.target.value = '';
 
-    const XLSX = await import('xlsx');
-    const data = await file.arrayBuffer();
-    const workbook = XLSX.read(data);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    try {
+      const XLSX = await import('xlsx');
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-    if (rows.length < 2) return showAlert('Excel file is empty or invalid format.', 'error');
+      if (rows.length < 2) return showAlert('Excel file is empty.', 'error');
 
-    const newTimetable = { ...timetable };
-    
-    for (let r = 1; r < rows.length; r++) {
-      const row = rows[r];
-      const periodLabel = row[0]; 
+      const newTimetable = { ...timetable };
       
-      const period = timetable.periods.find(p => periodLabel && periodLabel.includes(p.label));
-      if (!period) continue;
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r];
+        const periodLabel = row[0];
+        const period = timetable.periods.find(p => periodLabel && periodLabel.includes(p.label));
+        if (!period) continue;
 
-      for (let c = 1; c <= 6; c++) { 
-        const cellValue = row[c];
-        if (!cellValue) continue;
+        for (let c = 1; c <= 6; c++) {
+          const cellValue = row[c];
+          if (!cellValue) continue;
 
-        let subject = cellValue;
-        let teacherId = 'ACTIVITY'; 
-        let activityType = null;
+          let subject = cellValue;
+          let teacherId = 'ACTIVITY';
+          let activityType = null;
 
-        if (cellValue.includes('(')) {
-          const match = cellValue.match(/(.+)\((.+)\)/);
-          if (match) {
-            subject = match[1].trim();
-            const teacherName = match[2].trim();
-            const assign = assignments.find(a => a.teacher_name === teacherName || a.teacher_id === teacherName);
-            if (assign) { teacherId = assign.teacher_id; } 
-            else { teacherId = 'UNKNOWN'; }
-          }
-        } else {
-          const act = ['GAMES', 'LIBRARY', 'LAB'].find(a => subject.toUpperCase().includes(a));
-          if (act) activityType = act.toLowerCase();
-        }
-
-        const dayIndex = newTimetable.days.findIndex(d => d.day_of_week === c);
-        if (dayIndex !== -1) {
-          const existingSlotIndex = newTimetable.days[dayIndex].slots.findIndex(s => s.period_no === period.period_no);
-          
-          const newSlot = {
-            period_no: period.period_no,
-            subject_name: subject,
-            teacher_id: teacherId,
-            activity_type: activityType,
-          };
-
-          if (existingSlotIndex !== -1) {
-            newTimetable.days[dayIndex].slots[existingSlotIndex] = newSlot;
+          if (cellValue.includes('(')) {
+            const match = cellValue.match(/(.+)\((.+)\)/);
+            if (match) {
+              subject = match[1].trim();
+              const teacherName = match[2].trim();
+              const assign = assignments.find(a => a.teacher_name === teacherName || a.teacher_id === teacherName);
+              teacherId = assign ? assign.teacher_id : 'UNKNOWN';
+            }
           } else {
-            newTimetable.days[dayIndex].slots.push(newSlot);
+            const act = ['GAMES', 'LIBRARY', 'LAB'].find(a => subject.toUpperCase().includes(a));
+            if (act) activityType = act.toLowerCase();
+          }
+
+          const dayIndex = newTimetable.days.findIndex(d => d.day_of_week === c);
+          if (dayIndex !== -1) {
+            const existingSlotIndex = newTimetable.days[dayIndex].slots.findIndex(s => s.period_no === period.period_no);
+            const newSlot = { period_no: period.period_no, subject_name: subject, teacher_id: teacherId, activity_type: activityType };
+            if (existingSlotIndex !== -1) newTimetable.days[dayIndex].slots[existingSlotIndex] = newSlot;
+            else newTimetable.days[dayIndex].slots.push(newSlot);
           }
         }
       }
-    }
 
-    setTimetable(newTimetable);
-    setHasUnsavedChanges(true);
-    showAlert('Excel imported! Please review the grid and click "Save Timetable" to save to the database.', 'info', 'Import Successful');
+      setTimetable(newTimetable);
+      setHasUnsavedChanges(true);
+      showAlert('Imported! Review the grid and click Save.', 'success', 'Import Successful');
+    } catch (err) { showAlert('Import failed.', 'error'); }
+  };
+
+  const handlePeriodChange = async (action, data) => {
+    try {
+      if (action === 'add') {
+        const res = await fetch(`${API_BASE_URL}/timetable/periods`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ academic_year: DEFAULT_YEAR, label: data.label, start_time: data.start_time, end_time: data.end_time }),
+        });
+        const resData = await res.json();
+        if (!res.ok) return showAlert(resData.error, 'error');
+      } else if (action === 'delete') {
+        const res = await fetch(`${API_BASE_URL}/timetable/periods?id=${data.periodId}`, { method: 'DELETE' });
+        const resData = await res.json();
+        if (!res.ok) return showAlert(resData.error, 'error');
+      }
+      
+      // Refresh timetable data
+      if (selectedClass && selectedSection) {
+        const refreshRes = await fetch(`${API_BASE_URL}/timetable?class_id=${selectedClass}&section=${selectedSection}&academic_year=${DEFAULT_YEAR}`);
+        setTimetable(await refreshRes.json());
+        setHasUnsavedChanges(true); 
+      }
+      showAlert(`Period ${action === 'add' ? 'added' : 'deleted'} successfully.`, 'success');
+    } catch (err) { showAlert('Network error.', 'error'); }
   };
 
   const availableSections = sectionsByClass[selectedClass] || [];
@@ -280,12 +265,8 @@ export default function TimetablePage() {
         </div>
 
         <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl w-full sm:w-64 border border-white/10">
-          <button onClick={() => { setViewMode('class'); setSelectedTeacher(''); }} className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition ${viewMode === 'class' ? 'bg-blue-600 text-white' : 'text-white/60 hover:text-white'}`}>
-            <BookOpen size={16} /> By Class
-          </button>
-          <button onClick={() => { setViewMode('teacher'); setSelectedClass(''); setSelectedSection(''); }} className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition ${viewMode === 'teacher' ? 'bg-blue-600 text-white' : 'text-white/60 hover:text-white'}`}>
-            <User size={16} /> By Teacher
-          </button>
+          <button onClick={() => { setViewMode('class'); setSelectedTeacher(''); }} className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition ${viewMode === 'class' ? 'bg-blue-600 text-white' : 'text-white/60 hover:text-white'}`}><BookOpen size={16} /> By Class</button>
+          <button onClick={() => { setViewMode('teacher'); setSelectedClass(''); setSelectedSection(''); }} className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition ${viewMode === 'teacher' ? 'bg-blue-600 text-white' : 'text-white/60 hover:text-white'}`}><User size={16} /> By Teacher</button>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -303,19 +284,9 @@ export default function TimetablePage() {
               {selectedClass && selectedSection && (
                 <div className="flex flex-wrap items-center gap-2 ml-auto">
                   {hasUnsavedChanges && <span className="text-xs text-yellow-400 flex items-center gap-1"><AlertCircle size={14} /> Unsaved</span>}
-                  
-                  <button onClick={handleExport} className="px-4 py-2.5 bg-white/10 text-white rounded-xl font-semibold flex items-center gap-2 hover:bg-white/20 transition">
-                    <Download size={16} /> Export
-                  </button>
-                  
-                  <label className="px-4 py-2.5 bg-white/10 text-white rounded-xl font-semibold flex items-center gap-2 hover:bg-white/20 transition cursor-pointer">
-                    <Upload size={16} /> Import
-                    <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleImport} />
-                  </label>
-
-                  <button onClick={handleSave} disabled={saving || !hasUnsavedChanges} className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold flex items-center gap-2 hover:shadow-lg transition disabled:opacity-50">
-                    <Save size={16} /> {saving ? 'Saving…' : 'Save Timetable'}
-                  </button>
+                  <button onClick={handleExport} className="px-4 py-2.5 bg-white/10 text-white rounded-xl font-semibold flex items-center gap-2 hover:bg-white/20 transition"><Download size={16} /> Export</button>
+                  <label className="px-4 py-2.5 bg-white/10 text-white rounded-xl font-semibold flex items-center gap-2 hover:bg-white/20 transition cursor-pointer"><Upload size={16} /> Import<input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleImport} /></label>
+                  <button onClick={handleSave} disabled={saving || !hasUnsavedChanges} className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold flex items-center gap-2 hover:shadow-lg transition disabled:opacity-50"><Save size={16} /> {saving ? 'Saving…' : 'Save Timetable'}</button>
                 </div>
               )}
             </>
@@ -328,21 +299,11 @@ export default function TimetablePage() {
         </div>
 
         {((viewMode === 'class' && (!selectedClass || !selectedSection)) || (viewMode === 'teacher' && !selectedTeacher)) ? (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-12 text-center text-white/50">
-            {viewMode === 'class' ? 'Select a class and section to begin.' : 'Select a teacher to view their schedule.'}
-          </div>
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-12 text-center text-white/50">{viewMode === 'class' ? 'Select a class and section to begin.' : 'Select a teacher to view their schedule.'}</div>
         ) : loading ? (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-12 text-center text-white/50 flex items-center justify-center gap-3">
-            <RefreshCw className="animate-spin" size={20} /> Loading timetable…
-          </div>
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-12 text-center text-white/50 flex items-center justify-center gap-3"><RefreshCw className="animate-spin" size={20} /> Loading timetable…</div>
         ) : timetable ? (
-          <TimetableGrid 
-            timetable={timetable} 
-            assignments={assignments} 
-            onGridChange={handleGridChange} 
-            isReadOnly={viewMode === 'teacher'} 
-            onPeriodChange={handlePeriodChange} // ✅ NEW PROP
-          />
+          <TimetableGrid timetable={timetable} assignments={assignments} onGridChange={handleGridChange} isReadOnly={viewMode === 'teacher'} onPeriodChange={handlePeriodChange} />
         ) : null}
       </div>
 
