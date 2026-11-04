@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  assetPrefix: '/admin',
+  basePath: '/admin',
+  swcMinify: false, // ✅ ADD THIS LINE
   reactStrictMode: true,
-  // Ignore warnings from jsonwebtoken (Node.js APIs not available in Edge)
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -15,7 +15,6 @@ const nextConfig = {
     }
     return config;
   },
-  // Force dynamic rendering for pages that use client-side hooks
   staticPageGenerationTimeout: 120,
 };
 
