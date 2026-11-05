@@ -7,16 +7,15 @@ const JWT_SECRET = process.env.AUTH_SECRET || 'your-shared-secret';
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { email, phone } = body;
+    
+    // ✅ FIX: Default to null to prevent Postgres UNDEFINED_VALUE errors
+    const email = body.email || null;
+    const phone = body.phone || null;
 
     if (!email && !phone) {
       return NextResponse.json({ error: 'Email or phone required' }, { status: 400 });
     }
 
-    // ✅ FIXED: Using the correct column names Bhuvan provided
-    // email_id instead of email
-    // mobile_no instead of phone
-    // role_id instead of role (we check role_id = 1 or 'Admin' depending on DB setup)
     const users = await sql`
       SELECT user_id, login_id, email_id, full_name, role_id, school_id
       FROM sgs_users_masters
@@ -30,16 +29,13 @@ export async function POST(request) {
     }
 
     const user = users[0];
-
-    // Note: Since we don't know the exact role_id for School Admin, we'll assume 
-    // any valid user in this table is allowed, or you can restrict by role_id if known.
     
     const token = jwt.sign(
       {
         userId: user.user_id,
         email: user.email_id,
         login_id: user.login_id,
-        role: user.role_id, // passing role_id as role
+        role: user.role_id,
         school_id: user.school_id,
       },
       JWT_SECRET,
