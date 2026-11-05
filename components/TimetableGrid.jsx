@@ -19,6 +19,9 @@ export default function TimetableGrid({ timetable, assignments, onGridChange, is
   const [addingPeriod, setAddingPeriod] = useState(false);
   const [newPeriod, setNewPeriod] = useState({ label: '', start_time: '', end_time: '' });
 
+  // ✅ SAFETY CHECK: If timetable isn't ready, render nothing
+  if (!timetable || !timetable.periods || !timetable.days) return null;
+
   const { periods, days } = timetable;
 
   const slotLookup = new Map();
@@ -36,7 +39,6 @@ export default function TimetableGrid({ timetable, assignments, onGridChange, is
   };
 
   const handlePickerSave = (subjectName, teacherId, activityType) => {
-    // ... same logic as before ...
     if (!pickerCell) return;
     const { day_of_week, period_no } = pickerCell;
 
@@ -61,7 +63,6 @@ export default function TimetableGrid({ timetable, assignments, onGridChange, is
     setPickerCell(null);
   };
 
-  // ✅ NEW: Handle Add Period
   const handleAddPeriod = () => {
     if (!newPeriod.label || !newPeriod.start_time || !newPeriod.end_time) return;
     onPeriodChange('add', newPeriod);
@@ -69,9 +70,7 @@ export default function TimetableGrid({ timetable, assignments, onGridChange, is
     setNewPeriod({ label: '', start_time: '', end_time: '' });
   };
 
-  // ✅ NEW: Handle Delete Period
   const handleDeletePeriod = (periodId, periodNo) => {
-    // Check if any cell in this period has data
     const hasData = timetable.days.some(day => day.slots.some(s => s.period_no === periodNo));
     if (hasData) {
       alert("You must clear all classes for this period before deleting it.");
@@ -109,12 +108,10 @@ export default function TimetableGrid({ timetable, assignments, onGridChange, is
                         </div>
                       </div>
                       
-                      {/* ✅ NEW: Delete Button (Only if not readonly) */}
                       {!isReadOnly && p.is_teaching && (
                         <button 
                           onClick={() => handleDeletePeriod(p.period_id, p.period_no)}
                           className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-red-500/10 text-red-400 opacity-0 group-hover:opacity-100 transition rounded hover:bg-red-500/20"
-                          title="Remove this period"
                         >
                           <Minus size={12} />
                         </button>
@@ -143,40 +140,24 @@ export default function TimetableGrid({ timetable, assignments, onGridChange, is
         </div>
       </div>
 
-      {/* ✅ NEW: Add Period Button */}
       {!isReadOnly && (
         <div className="mt-4 flex items-center justify-between">
           <div className="text-xs text-white/50 flex flex-wrap items-center gap-4">
             <span>● Click any teaching cell to assign a subject or activity.</span>
           </div>
-          <button 
-            onClick={() => setAddingPeriod(true)} 
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm flex items-center gap-2 hover:bg-blue-700 transition"
-          >
-            <Plus size={16} /> Add Period
-          </button>
+          <button onClick={() => setAddingPeriod(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm flex items-center gap-2 hover:bg-blue-700 transition"><Plus size={16} /> Add Period</button>
         </div>
       )}
 
-      {/* ✅ NEW: Add Period Modal */}
       {addingPeriod && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-white/10">
             <h3 className="text-lg font-semibold text-white mb-4">Add New Period</h3>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-white/70 mb-1">Label (e.g., "9th Period")</label>
-                <input type="text" value={newPeriod.label} onChange={(e) => setNewPeriod({...newPeriod, label: e.target.value})} className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white" />
-              </div>
+              <div><label className="block text-sm text-white/70 mb-1">Label (e.g., "9th Period")</label><input type="text" value={newPeriod.label} onChange={(e) => setNewPeriod({...newPeriod, label: e.target.value})} className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white" /></div>
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-sm text-white/70 mb-1">Start Time</label>
-                  <input type="time" value={newPeriod.start_time} onChange={(e) => setNewPeriod({...newPeriod, start_time: e.target.value})} className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white" />
-                </div>
-                <div>
-                  <label className="block text-sm text-white/70 mb-1">End Time</label>
-                  <input type="time" value={newPeriod.end_time} onChange={(e) => setNewPeriod({...newPeriod, end_time: e.target.value})} className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white" />
-                </div>
+                <div><label className="block text-sm text-white/70 mb-1">Start Time</label><input type="time" value={newPeriod.start_time} onChange={(e) => setNewPeriod({...newPeriod, start_time: e.target.value})} className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white" /></div>
+                <div><label className="block text-sm text-white/70 mb-1">End Time</label><input type="time" value={newPeriod.end_time} onChange={(e) => setNewPeriod({...newPeriod, end_time: e.target.value})} className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white" /></div>
               </div>
             </div>
             <div className="flex gap-2 mt-6">
@@ -192,4 +173,4 @@ export default function TimetableGrid({ timetable, assignments, onGridChange, is
       )}
     </>
   );
-}s
+}
