@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   basePath: '/admin',
-  swcMinify: false, // ✅ ADD THIS LINE
   reactStrictMode: true,
   webpack: (config, { isServer }) => {
     if (!isServer) {
