@@ -18,9 +18,17 @@ export function middleware(request) {
   // 3. Catch the token from the portal redirect (?token=...)
   const urlToken = searchParams.get('token');
   if (urlToken) {
-    // Create the clean URL without the token query param
-    const cleanUrl = new URL(pathname, request.url);
-    
+    // Clone the request URL and drop the token, rather than rebuilding one from
+    // `pathname`.
+    //
+    // next.config.js sets basePath: '/admin', so Next has already stripped that
+    // prefix by the time middleware runs — pathname here is "/students", not
+    // "/admin/students". Building a fresh URL from it produced a redirect to
+    // /students, which matches no route and 404s. Cloning nextUrl keeps the
+    // basePath, so the browser goes back to /admin/students as intended.
+    const cleanUrl = request.nextUrl.clone();
+    cleanUrl.searchParams.delete('token');
+
     const response = NextResponse.redirect(cleanUrl);
     response.cookies.set('admin_token', urlToken, {
       httpOnly: true,
