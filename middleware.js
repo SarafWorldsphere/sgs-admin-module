@@ -3,28 +3,35 @@ import { NextResponse } from 'next/server';
 export function middleware(request) {
   const { pathname, searchParams } = request.nextUrl;
   
-  // 1. Login Portal URL
-  const loginPortalUrl = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL || 'https://staging.sgs.swais.in/login';
+  // 1. Login Portal URL (should be https://staging.sgs.swais.in)
+  const loginPortalUrl = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL || 'https://staging.sgs.swais.in';
 
-  // 2. Allow the SSO endpoint to pass through (the portal calls this)
-  if (pathname.startsWith('/api/auth/')) {
+  // 2. Allow SSO endpoint and static files
+  if (
+    pathname.startsWith('/api/auth/') || 
+    pathname.startsWith('/_next/') || 
+    pathname.includes('favicon.ico')
+  ) {
     return NextResponse.next();
   }
 
-  // 3. Capture token from portal
+  // 3. Catch the token from the portal redirect (?token=...)
   const urlToken = searchParams.get('token');
   if (urlToken) {
-    const response = NextResponse.redirect(new URL(pathname, request.url));
+    // Create the clean URL without the token query param
+    const cleanUrl = new URL(pathname, request.url);
+    
+    const response = NextResponse.redirect(cleanUrl);
     response.cookies.set('admin_token', urlToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       path: '/',
-      maxAge: 60 * 60 * 24,
+      maxAge: 60 * 60 * 24, // 1 day
     });
     return response;
   }
 
-  // 4. Check for token in cookies or headers
+  // 4. Check for existing token
   const cookieToken = request.cookies.get('admin_token')?.value;
   const authHeader = request.headers.get('authorization');
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
