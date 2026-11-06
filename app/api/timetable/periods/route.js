@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { sql } from '../../../../lib/db';
 import { verifyAdminToken } from '../../../../lib/auth-verify';
 
-// POST: Add a new period
 export async function POST(request) {
   const auth = verifyAdminToken(request);
   if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
@@ -14,7 +13,15 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Label, start time, and end time are required' }, { status: 400 });
     }
 
-    // Find the highest period_no to append after
+    // ✅ Duplicate Prevention: Check if label already exists
+    const existing = await sql`
+      SELECT period_id FROM sgs_period_master 
+      WHERE academic_year = ${academic_year} AND LOWER(period_label) = LOWER(${label})
+    `;
+    if (existing.length > 0) {
+      return NextResponse.json({ error: `A period with the name "${label}" already exists.` }, { status: 400 });
+    }
+
     const maxPeriod = await sql`
       SELECT MAX(period_no) as max_no 
       FROM sgs_period_master 
@@ -38,7 +45,6 @@ export async function POST(request) {
   }
 }
 
-// DELETE: Remove a period
 export async function DELETE(request) {
   const auth = verifyAdminToken(request);
   if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
@@ -49,7 +55,7 @@ export async function DELETE(request) {
 
     if (!periodId) return NextResponse.json({ error: 'Period ID required' }, { status: 400 });
 
-    // Check if this period has data in ANY timetable
+    // ✅ Deletion Check: Ensure it's not used in ANY timetable
     const conflicts = await sql`
       SELECT COUNT(*) as count FROM sgs_timetable 
       WHERE period_no = (SELECT period_no FROM sgs_period_master WHERE period_id = ${periodId})
@@ -62,10 +68,7 @@ export async function DELETE(request) {
       }, { status: 400 });
     }
 
-    await sql`
-      DELETE FROM sgs_period_master WHERE period_id = ${periodId}
-    `;
-
+    await sql`DELETE FROM sgs_period_master WHERE period_id = ${periodId}`;
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting period:', error);

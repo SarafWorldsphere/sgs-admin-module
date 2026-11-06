@@ -68,7 +68,6 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
       });
       setStep(1);
       setErrors({});
-      generateStudentId();
     }
   }, [isOpen, editData]);
 
@@ -310,24 +309,24 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
                     <h4 className={`text-sm font-medium ${isDark ? 'text-white/80' : 'text-gray-700'}`}>Student Information</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className={`block text-sm font-medium ${labelColor}`}>
-                          Admission Number * <span className="text-xs text-white/40">(digits only{editData ? ', read-only' : ''})</span>
-                        </label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          maxLength={10}
-                          name="admission_no"
-                          value={formData.admission_no}
-                          onChange={handleChange}
-                          readOnly={!!editData}
-                          disabled={!!editData}
-                          className={`w-full px-3 py-2 mt-1 ${inputBg} border ${errors.admission_no ? 'border-red-500' : inputBorder} rounded-lg ${inputText} ${placeholderColor} focus:outline-none focus:border-blue-500 ${editData ? 'cursor-not-allowed' : ''}`}
-                          placeholder="e.g., 12345"
-                        />
-                        {errors.admission_no && <p className="mt-1 text-xs text-red-500">{errors.admission_no}</p>}
-                      </div>
+  <label className={`block text-sm font-medium ${labelColor}`}>
+    Admission Number * <span className="text-xs text-white/40">(digits only{editData ? ', read-only' : ''})</span>
+  </label>
+  <input 
+    type="text" 
+    inputMode="numeric" 
+    pattern="[0-9]*" 
+    maxLength={10} 
+    name="admission_no" 
+    value={formData.admission_no} 
+    onChange={handleChange} 
+    readOnly={!!editData} 
+    disabled={!!editData} 
+    className={`w-full px-3 py-2 mt-1 ${inputBg} border ${errors.admission_no ? 'border-red-500' : inputBorder} rounded-lg ${inputText} ${placeholderColor} focus:outline-none focus:border-blue-500 ${editData ? 'cursor-not-allowed' : ''}`} 
+    placeholder="e.g., 12345" 
+  />
+  {errors.admission_no && <p className="mt-1 text-xs text-red-500">{errors.admission_no}</p>}
+</div>
                       <div>
                         <label className={`block text-sm font-medium ${labelColor}`}>Student Name *</label>
                         <input

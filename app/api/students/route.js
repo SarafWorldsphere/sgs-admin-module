@@ -204,6 +204,23 @@ export async function POST(request) {
       }
     }
 
+        // Duplicate Roll No check
+    if (roll_no && class_id && section) {
+      const existingRoll = await sql`
+        SELECT admission_no FROM sgs_student_master
+        WHERE class_id = ${class_id} 
+          AND section = ${section} 
+          AND roll_no = ${roll_no}
+          AND record_status IN ('Active', 'Inactive')
+      `;
+      if (existingRoll.length > 0) {
+        return NextResponse.json(
+          { error: `Roll No ${roll_no} is already assigned to ${existingRoll[0].admission_no} in this class.` },
+          { status: 400 }
+        );
+      }
+    }
+
     const parents = buildParentsFromPayload(body);
 
     const result = await sql.begin(async (tx) => {
