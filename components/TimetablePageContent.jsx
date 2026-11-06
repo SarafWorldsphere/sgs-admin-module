@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useState, useEffect } from 'react';
 import { Save, AlertCircle, RefreshCw, BookOpen, User, Download, Upload } from 'lucide-react';
 import TimetableGrid from './TimetableGrid';
@@ -11,7 +10,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
 const DEFAULT_YEAR = '2026-27';
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-export default function TimetablePage() {
+export default function TimetablePageContent() {
   const [viewMode, setViewMode] = useState('class');
   
   const [classes, setClasses] = useState([]);
@@ -72,9 +71,7 @@ export default function TimetablePage() {
           ]);
           const ttData = await ttRes.json();
           const asData = await asRes.json();
-          
           if (!ttData || ttData.error) throw new Error(ttData?.error || 'Failed to load timetable');
-          
           setTimetable(ttData);
           setAssignments(Array.isArray(asData.assignments) ? asData.assignments : []);
         } catch (err) { showAlert(err.message, 'error', 'Load Failed'); } finally { setLoading(false); }
@@ -86,9 +83,7 @@ export default function TimetablePage() {
         try {
           const res = await fetch(`${API_BASE_URL}/timetable/teacher?teacher_id=${selectedTeacher}&academic_year=${DEFAULT_YEAR}`);
           const data = await res.json();
-          
           if (!data || data.error) throw new Error(data?.error || 'Failed to load teacher');
-
           const days = [1,2,3,4,5,6].map(dow => ({
             day_of_week: dow,
             day_name: DAYS[dow-1],
@@ -103,10 +98,7 @@ export default function TimetablePage() {
     }
   }, [viewMode, selectedClass, selectedSection, selectedTeacher]);
 
-  const handleGridChange = (newTimetable) => {
-    setTimetable(newTimetable);
-    setHasUnsavedChanges(true);
-  };
+  const handleGridChange = (newTimetable) => { setTimetable(newTimetable); setHasUnsavedChanges(true); };
 
   const handleSave = async () => {
     if (!timetable || viewMode !== 'class') return;
@@ -141,11 +133,10 @@ export default function TimetablePage() {
   };
 
   const handleExport = async () => {
-    if (!timetable) return; // SAFETY CHECK
+    if (!timetable) return; 
     try {
       const XLSX = await import('xlsx');
       const rows = [['Period', ...DAYS]];
-      
       for (const p of timetable.periods) {
         if (!p.is_teaching) continue; 
         const row = [`${p.label} (${p.start_time})`];
@@ -155,17 +146,13 @@ export default function TimetablePage() {
           if (slot) {
             const teacher = assignments.find(a => a.teacher_id === slot.teacher_id)?.teacher_name || slot.teacher_id;
             row.push(`${slot.subject_name} (${teacher})`);
-          } else {
-            row.push('');
-          }
+          } else { row.push(''); }
         }
         rows.push(row);
       }
-
       const worksheet = XLSX.utils.aoa_to_sheet(rows);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Timetable');
-      
       const className = classes.find(c => String(c.class_id) === String(selectedClass))?.class_name || selectedClass;
       XLSX.writeFile(workbook, `Timetable_${className}_${selectedSection}.xlsx`);
     } catch (err) { showAlert('Export failed.', 'error'); }
@@ -186,7 +173,6 @@ export default function TimetablePage() {
       if (rows.length < 2) return showAlert('Excel file is empty.', 'error');
 
       const newTimetable = { ...timetable };
-      
       for (let r = 1; r < rows.length; r++) {
         const row = rows[r];
         const periodLabel = row[0];
@@ -196,11 +182,9 @@ export default function TimetablePage() {
         for (let c = 1; c <= 6; c++) {
           const cellValue = row[c];
           if (!cellValue) continue;
-
           let subject = cellValue;
           let teacherId = 'ACTIVITY';
           let activityType = null;
-
           if (cellValue.includes('(')) {
             const match = cellValue.match(/(.+)\((.+)\)/);
             if (match) {
@@ -213,7 +197,6 @@ export default function TimetablePage() {
             const act = ['GAMES', 'LIBRARY', 'LAB'].find(a => subject.toUpperCase().includes(a));
             if (act) activityType = act.toLowerCase();
           }
-
           const dayIndex = newTimetable.days.findIndex(d => d.day_of_week === c);
           if (dayIndex !== -1) {
             const existingSlotIndex = newTimetable.days[dayIndex].slots.findIndex(s => s.period_no === period.period_no);
@@ -223,7 +206,6 @@ export default function TimetablePage() {
           }
         }
       }
-
       setTimetable(newTimetable);
       setHasUnsavedChanges(true);
       showAlert('Imported! Review the grid and click Save.', 'success', 'Import Successful');
@@ -245,13 +227,13 @@ export default function TimetablePage() {
         if (!res.ok) return showAlert(resData.error, 'error');
       }
       
-      // Refresh timetable data
       if (selectedClass && selectedSection) {
         const refreshRes = await fetch(`${API_BASE_URL}/timetable?class_id=${selectedClass}&section=${selectedSection}&academic_year=${DEFAULT_YEAR}`);
         setTimetable(await refreshRes.json());
         setHasUnsavedChanges(true); 
       }
-      showAlert(`Period ${action === 'add' ? 'added' : 'deleted'} successfully.`, 'success');
+      // ✅ FIX 1: Proper Title for Success
+      showAlert(`Period ${action === 'add' ? 'added' : 'deleted'} successfully.`, 'success', 'Success');
     } catch (err) { showAlert('Network error.', 'error'); }
   };
 
