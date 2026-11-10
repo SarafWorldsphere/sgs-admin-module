@@ -8,6 +8,7 @@ import AlertModal from '../../../components/AlertModal';
 import ViewModal from '../../../components/ViewModal';
 import { formatClassName } from '../../../lib/format-class-name';
 // Note: adjust this path if your components folder is located elsewhere
+import { fetchWithAuth } from '../../../lib/fetchWithAuth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
 
@@ -39,7 +40,7 @@ export default function TeachersPage() {
   const fetchTeachers = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/teachers`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/teachers`);
       const data = await response.json();
       setTeachers(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -52,7 +53,7 @@ export default function TeachersPage() {
 
   const fetchClasses = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/classes`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/classes`);
       const data = await response.json();
       setAvailableClasses(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -62,7 +63,7 @@ export default function TeachersPage() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/teachers/stats`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/teachers/stats`);
       const data = await response.json();
       setStatsData({
         total: Number(data.total) || 0,
@@ -82,7 +83,7 @@ export default function TeachersPage() {
     setTeachers((prev) => prev.map((t) => t.teacher_id === teacher.teacher_id ? { ...t, status: newStatus, is_active: newStatus === 'Active' } : t));
 
     try {
-      const response = await fetch(`${API_BASE_URL}/teachers`, {
+      const response = await fetchWithAuth(`${API_BASE_URL}/teachers`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teacher_id: teacher.teacher_id || teacher.id, status: newStatus }),
       });
@@ -107,7 +108,7 @@ export default function TeachersPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await fetch(`${API_BASE_URL}/teachers?id=${deleteTarget}`, { method: 'DELETE' });
+      await fetchWithAuth(`${API_BASE_URL}/teachers?id=${deleteTarget}`, { method: 'DELETE' });
       fetchTeachers();
       fetchStats();
     } catch (error) {

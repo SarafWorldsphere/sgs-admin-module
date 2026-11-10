@@ -3,10 +3,9 @@ import { NextResponse } from 'next/server';
 export function middleware(request) {
   const { pathname, searchParams } = request.nextUrl;
   
-  // 1. Login Portal URL (should be https://staging.sgs.swais.in)
   const loginPortalUrl = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL || 'https://staging.sgs.swais.in';
 
-  // 2. Allow SSO endpoint and static files
+  // Allow SSO endpoint and static assets
   if (
     pathname.startsWith('/api/auth/') || 
     pathname.startsWith('/_next/') || 
@@ -15,47 +14,43 @@ export function middleware(request) {
     return NextResponse.next();
   }
 
-  // 3. Catch the token from the portal redirect (?token=...)
+  // Catch the token from the portal redirect (?token=...)
   const urlToken = searchParams.get('token');
   if (urlToken) {
-    // Clone the request URL and drop the token, rather than rebuilding one from
-    // `pathname`.
-    //
-    // next.config.js sets basePath: '/admin', so Next has already stripped that
-    // prefix by the time middleware runs — pathname here is "/students", not
-    // "/admin/students". Building a fresh URL from it produced a redirect to
-    // /students, which matches no route and 404s. Cloning nextUrl keeps the
-    // basePath, so the browser goes back to /admin/students as intended.
-    const cleanUrl = request.nextUrl.clone();
-    cleanUrl.searchParams.delete('token');
-
+    // Strip the token from the URL and save it to sessionStorage in the browser
+    const cleanUrl = new URL(pathname, request.url);
     const response = NextResponse.redirect(cleanUrl);
-    response.cookies.set('admin_token', urlToken, {
+    
+    // We cannot set sessionStorage from the middleware, so we pass a short-lived cookie 
+    // ONLY to survive the immediate redirect.
+    response.cookies.set('admin_token_transient', urlToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       path: '/',
-      maxAge: 60 * 60 * 24, // 1 day
+      maxAge: 60, // 1 minute (only enough to survive the redirect)
     });
     return response;
   }
 
-  // 4. Check for existing token
-  const cookieToken = request.cookies.get('admin_token')?.value;
-  const authHeader = request.headers.get('authorization');
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  const token = cookieToken || bearerToken;
-
-  // 5. Redirect to portal if no token
-  if (!token) {
-    return NextResponse.redirect(loginPortalUrl);
+  // Check for the transient cookie (just arrived from portal)
+  const transientToken = request.cookies.get('admin_token_transient')?.value;
+  if (transientToken) {
+    // Clear the transient cookie and let them in
+    const response = NextResponse.next();
+    response.cookies.delete('admin_token_transient');
+    return response;
   }
 
-  return NextResponse.next();
+  // Check for Authorization header (used by API calls)
+  const authHeader = request.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return NextResponse.next();
+  }
+
+  // ❌ If none of the above, block and redirect
+  return NextResponse.redirect(loginPortalUrl);
 }
 
 export const config = {
-  matcher: [
-    // Protect all admin pages and API routes
-    '/((?!_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

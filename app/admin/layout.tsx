@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../../components/ConfirmModal';
 import { 
@@ -10,23 +11,36 @@ import {
   Menu,
   X,
   LogOut,
-  Calendar // ✅ Added Calendar icon
+  Calendar
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+// ✅ Inner component to safely handle search params without crashing the layout
+function TokenHandler() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const token = searchParams.get('token');
+    if (token) {
+      // Save to sessionStorage
+      sessionStorage.setItem('admin_token', token);
+      // Clean the URL
+      router.replace(pathname);
+    }
+  }, [searchParams, router, pathname]);
+
+  return null;
+}
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   // Desktop: sidebar is expanded (280px) or collapsed (80px)
   const [sidebarOpen, setSidebarOpen] = useState(true);
   // Mobile: drawer is closed by default, overlays content when opened
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const pathname = usePathname();
-  const router = useRouter();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Auto-close mobile drawer on route change
@@ -41,18 +55,18 @@ export default function AdminLayout({
   const confirmLogout = () => {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = process.env.NEXT_PUBLIC_APP_URL || 'https://staging.sgs.swais.in';
+    // Redirect to external portal URL
+    window.location.href = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL || 'https://staging.sgs.swais.in';
   };
 
   const menuItems = [
     { id: 'teachers', name: 'Teachers', icon: BookOpen, path: '/admin/teachers', color: 'from-green-500 to-emerald-500' },
     { id: 'students', name: 'Students', icon: Users, path: '/admin/students', color: 'from-blue-500 to-cyan-500' },
-    // ✅ Added Timetable to the menu
     { id: 'timetable', name: 'Timetable', icon: Calendar, path: '/admin/timetable', color: 'from-orange-500 to-red-500' },
     { id: 'others', name: 'Others', icon: Settings, path: '/admin/others', color: 'from-purple-500 to-pink-500' },
   ];
 
-  // Shared sidebar content (used by both desktop rail and mobile drawer)
+  // Shared sidebar content
   const SidebarContent = ({ isMobile = false }) => {
     const isExpanded = isMobile ? true : sidebarOpen;
     return (
@@ -129,7 +143,12 @@ export default function AdminLayout({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
-      {/* ============ DESKTOP SIDEBAR (hidden on mobile) ============ */}
+      {/* ✅ Wrap the TokenHandler in Suspense to prevent Next.js build errors */}
+      <Suspense fallback={null}>
+        <TokenHandler />
+      </Suspense>
+
+      {/* DESKTOP SIDEBAR */}
       <motion.aside 
         initial={false}
         animate={{ width: sidebarOpen ? '280px' : '80px' }}
@@ -138,11 +157,10 @@ export default function AdminLayout({
         <SidebarContent isMobile={false} />
       </motion.aside>
 
-      {/* ============ MOBILE SIDEBAR DRAWER ============ */}
+      {/* MOBILE SIDEBAR DRAWER */}
       <AnimatePresence>
         {mobileSidebarOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -150,7 +168,6 @@ export default function AdminLayout({
               className="lg:hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[60]"
               onClick={() => setMobileSidebarOpen(false)}
             />
-            {/* Drawer */}
             <motion.aside
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
@@ -158,11 +175,9 @@ export default function AdminLayout({
               transition={{ type: 'tween', duration: 0.25 }}
               className="lg:hidden fixed left-0 top-0 h-full w-[280px] bg-slate-900/95 backdrop-blur-xl border-r border-white/10 z-[70] overflow-y-auto"
             >
-              {/* Close button */}
               <button
                 onClick={() => setMobileSidebarOpen(false)}
                 className="absolute top-4 right-4 text-white/60 hover:text-white p-2 rounded-lg hover:bg-white/10 transition z-10"
-                aria-label="Close menu"
               >
                 <X size={22} />
               </button>
@@ -172,22 +187,19 @@ export default function AdminLayout({
         )}
       </AnimatePresence>
 
-      {/* ============ MAIN CONTENT ============ */}
+      {/* MAIN CONTENT */}
       <main
         className={`transition-all duration-300 ${
           sidebarOpen ? 'lg:ml-[280px]' : 'lg:ml-[80px]'
         } ml-0`}
       >
-        {/* Welcome Header */}
         <div className="bg-white/5 backdrop-blur-xl border-b border-white/10 sticky top-0 z-40">
           <div className="px-4 sm:px-6 lg:px-8 py-3 lg:py-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                {/* Mobile hamburger — always visible under lg */}
                 <button
                   onClick={() => setMobileSidebarOpen(true)}
                   className="lg:hidden flex-shrink-0 p-2 rounded-xl bg-white/10 text-white hover:bg-white/20 transition"
-                  aria-label="Open menu"
                 >
                   <Menu size={22} />
                 </button>
@@ -203,7 +215,6 @@ export default function AdminLayout({
                 </div>
               </div>
 
-              {/* Right side logo block — hide small label on very small screens */}
               <div className="flex items-center gap-3 flex-shrink-0">
                 <div className="w-10 h-10 sm:w-12 sm:h-12 relative rounded-xl overflow-hidden border border-yellow-400/20">
                   <Image src="/sgslogo.jpeg" alt="SGS School Logo" fill className="object-cover" />

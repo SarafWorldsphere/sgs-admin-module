@@ -5,6 +5,7 @@ import { Save, AlertCircle, RefreshCw, BookOpen, User, Download, Upload } from '
 import TimetableGrid from './TimetableGrid';
 import AlertModal from './AlertModal';
 import { formatClassName } from '../lib/format-class-name';
+import { fetchWithAuth } from '../lib/fetchWithAuth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
 const DEFAULT_YEAR = '2026-27';
@@ -35,8 +36,8 @@ export default function TimetablePageContent() {
     (async () => {
       try {
         const [cRes, tRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/classes`),
-          fetch(`${API_BASE_URL}/teachers`)
+          fetchWithAuth(`${API_BASE_URL}/classes`),
+          fetchWithAuth(`${API_BASE_URL}/teachers`)
         ]);
         const cData = await cRes.json();
         const tData = await tRes.json();
@@ -50,7 +51,7 @@ export default function TimetablePageContent() {
     if (!selectedClass || viewMode !== 'class') return;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/sections?class_id=${selectedClass}`);
+        const res = await fetchWithAuth(`${API_BASE_URL}/sections?class_id=${selectedClass}`);
         const data = await res.json();
         setSectionsByClass((prev) => ({ ...prev, [selectedClass]: data.sections || [] }));
         setSelectedSection('');
@@ -66,8 +67,8 @@ export default function TimetablePageContent() {
         setLoading(true); setHasUnsavedChanges(false);
         try {
           const [ttRes, asRes] = await Promise.all([
-            fetch(`${API_BASE_URL}/timetable?class_id=${selectedClass}&section=${selectedSection}&academic_year=${DEFAULT_YEAR}`),
-            fetch(`${API_BASE_URL}/timetable/teacher-assignments?class_id=${selectedClass}&section=${selectedSection}`),
+            fetchWithAuth(`${API_BASE_URL}/timetable?class_id=${selectedClass}&section=${selectedSection}&academic_year=${DEFAULT_YEAR}`),
+            fetchWithAuth(`${API_BASE_URL}/timetable/teacher-assignments?class_id=${selectedClass}&section=${selectedSection}`),
           ]);
           const ttData = await ttRes.json();
           const asData = await asRes.json();
@@ -81,7 +82,7 @@ export default function TimetablePageContent() {
       (async () => {
         setLoading(true);
         try {
-          const res = await fetch(`${API_BASE_URL}/timetable/teacher?teacher_id=${selectedTeacher}&academic_year=${DEFAULT_YEAR}`);
+          const res = await fetchWithAuth(`${API_BASE_URL}/timetable/teacher?teacher_id=${selectedTeacher}&academic_year=${DEFAULT_YEAR}`);
           const data = await res.json();
           if (!data || data.error) throw new Error(data?.error || 'Failed to load teacher');
           const days = [1,2,3,4,5,6].map(dow => ({
@@ -116,7 +117,7 @@ export default function TimetablePageContent() {
 
     setSaving(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/timetable`, {
+      const response = await fetchWithAuth(`${API_BASE_URL}/timetable`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ academic_year: timetable.academic_year, class_id: timetable.class_id, section: timetable.section, slots }),
       });

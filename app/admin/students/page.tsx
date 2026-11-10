@@ -12,6 +12,7 @@ import ModifyLookupModal from '../../../components/ModifyLookupModal';
 import AlertModal from '../../../components/AlertModal';
 import ViewModal from '../../../components/ViewModal';
 import { formatClassName } from '../../../lib/format-class-name';
+import { fetchWithAuth } from '../../../lib/fetchWithAuth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
 
@@ -44,7 +45,7 @@ export default function StudentsPage() {
   const fetchStudents = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/students`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/students`);
       const data = await response.json();
       
       if (Array.isArray(data)) {
@@ -99,7 +100,7 @@ export default function StudentsPage() {
     );
 
     try {
-      const response = await fetch(`${API_BASE_URL}/students`, {
+      const response = await fetchWithAuth(`${API_BASE_URL}/students`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ admission_no: student.admission_no, status: newStatus }),
@@ -163,7 +164,7 @@ export default function StudentsPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/students?id=${deleteTarget}`, { method: 'DELETE' });
+      const response = await fetchWithAuth(`${API_BASE_URL}/students?id=${deleteTarget}`, { method: 'DELETE' });
       if (response.ok) {
         fetchStudents();
       } else {

@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../../../components/ConfirmModal';
 import AlertModal from '../../../components/AlertModal';
 import NotificationViewModal from '../../../components/NotificationViewModal';
+import { fetchWithAuth } from '../../../lib/fetchWithAuth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
 
@@ -51,7 +52,7 @@ export default function OthersPage() {
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/notices`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/notices`);
       if (!response.ok) {
         setNotifications([]);
         return;
@@ -66,7 +67,7 @@ export default function OthersPage() {
 
   const fetchEvents = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/events`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/events`);
       if (!response.ok) {
         setEvents([]);
         return;
@@ -135,7 +136,7 @@ export default function OthersPage() {
       payload.type = formData.type || 'event';
     }
     try {
-      const response = await fetch(`${API_BASE_URL}/${apiEndpoint}`, {
+      const response = await fetchWithAuth(`${API_BASE_URL}/${apiEndpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -170,7 +171,7 @@ export default function OthersPage() {
     else setEvents((prev) => updateList(prev));
 
     try {
-      const response = await fetch(`${API_BASE_URL}/${apiEndpoint}`, {
+      const response = await fetchWithAuth(`${API_BASE_URL}/${apiEndpoint}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id, status: newStatus }),
@@ -209,7 +210,7 @@ export default function OthersPage() {
     const { id, type } = deleteTarget;
     try {
       const apiEndpoint = type === 'notice' ? 'notices' : 'events';
-      const response = await fetch(`${API_BASE_URL}/${apiEndpoint}?id=${id}`, { method: 'DELETE' });
+      const response = await fetchWithAuth(`${API_BASE_URL}/${apiEndpoint}?id=${id}`, { method: 'DELETE' });
       if (response.ok) {
         if (type === 'notice') fetchNotifications();
         else fetchEvents();
