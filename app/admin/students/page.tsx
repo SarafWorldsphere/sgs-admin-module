@@ -14,7 +14,8 @@ import ViewModal from '../../../components/ViewModal';
 import { formatClassName } from '../../../lib/format-class-name';
 import { fetchWithAuth } from '../../../lib/fetchWithAuth';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
+// ✅ FIXED: Removed the hardcoded '/admin' prefix. Next.js handles the routing.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function StudentsPage() {
   const [students, setStudents] = useState([]);
@@ -45,7 +46,14 @@ export default function StudentsPage() {
   const fetchStudents = async () => {
     try {
       setLoading(true);
+      // ✅ Uses fetchWithAuth (Header is attached automatically)
       const response = await fetchWithAuth(`${API_BASE_URL}/students`);
+      
+      // Safety check for empty or bad responses
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const data = await response.json();
       
       if (Array.isArray(data)) {
@@ -91,6 +99,7 @@ export default function StudentsPage() {
     const currentStatus = student.status || student.record_status || 'Active';
     const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
 
+    // Optimistic UI update
     setStudents((prev) =>
       prev.map((s) =>
         s.admission_no === student.admission_no
@@ -100,6 +109,7 @@ export default function StudentsPage() {
     );
 
     try {
+      // ✅ Uses fetchWithAuth
       const response = await fetchWithAuth(`${API_BASE_URL}/students`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -109,6 +119,7 @@ export default function StudentsPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Revert on failure
         setStudents((prev) =>
           prev.map((s) =>
             s.admission_no === student.admission_no
@@ -122,6 +133,7 @@ export default function StudentsPage() {
       fetchStudents();
     } catch (error) {
       console.error('Toggle error:', error);
+      // Revert on error
       setStudents((prev) =>
         prev.map((s) =>
           s.admission_no === student.admission_no
@@ -164,6 +176,7 @@ export default function StudentsPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
+      // ✅ Uses fetchWithAuth
       const response = await fetchWithAuth(`${API_BASE_URL}/students?id=${deleteTarget}`, { method: 'DELETE' });
       if (response.ok) {
         fetchStudents();
@@ -349,7 +362,6 @@ export default function StudentsPage() {
             <Pencil size={18} /> Modify Student
           </button>
 
-          {/* ✅ Phase 1 — Item 7: Export to Excel */}
           <div className="flex flex-col sm:flex-row gap-2 sm:ml-auto">
             <select
               value={exportClass}
@@ -466,7 +478,6 @@ export default function StudentsPage() {
                       </td>
                       <td className="px-3 sm:px-4 py-3">
                         <div className="flex gap-1.5 sm:gap-2">
-                          {/* ✅ Phase 1 — Item 5: View */}
                           <button
                             onClick={() => setViewStudent(student)}
                             className="p-1.5 rounded-lg bg-gray-500/20 text-gray-300 hover:bg-gray-500/30 transition"
@@ -528,7 +539,6 @@ export default function StudentsPage() {
         onCancel={() => setDeleteTarget(null)}
       />
 
-      {/* ✅ Phase 1 — Item 5: View Modal */}
       <ViewModal
         isOpen={!!viewStudent}
         title={viewStudent ? `${viewStudent.full_name} — ${viewStudent.admission_no}` : ''}

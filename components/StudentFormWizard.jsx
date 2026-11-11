@@ -6,6 +6,7 @@ import { X, ChevronRight, ChevronLeft } from 'lucide-react';
 import { isValidName, isValidPhone, normalizePhone, isValidEmail, isGmailEmail } from '../lib/validators';
 import { formatClassName } from '../lib/format-class-name';
 import AlertModal from './AlertModal';
+import { fetchWithAuth } from '../lib/fetchWithAuth'; // Ensure this path is correct
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
 
@@ -14,7 +15,7 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
   const [loading, setLoading] = useState(false);
   const [availableClasses, setAvailableClasses] = useState([]);
   
-  // ✅ NEW: Dynamic sections
+  // ✅ Dynamic sections
   const [availableSections, setAvailableSections] = useState([]);
   const [loadingSections, setLoadingSections] = useState(false);
 
@@ -39,7 +40,8 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
 
   const fetchAvailableClasses = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/classes`);
+      // ✅ CHANGED TO fetchWithAuth
+      const response = await fetchWithAuth(`${API_BASE_URL}/classes`);
       if (response.ok) {
         const data = await response.json();
         setAvailableClasses(Array.isArray(data) ? data : []);
@@ -47,7 +49,7 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
     } catch (error) { console.error('Error fetching classes:', error); }
   };
 
-  // ✅ NEW: Fetch sections when class changes
+  // ✅ Fetch sections when class changes
   useEffect(() => {
     if (!formData.class_id) {
       setAvailableSections([]);
@@ -56,7 +58,8 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
     const fetchSections = async () => {
       setLoadingSections(true);
       try {
-        const res = await fetch(`${API_BASE_URL}/sections?class_id=${formData.class_id}`);
+        // ✅ CHANGED TO fetchWithAuth
+        const res = await fetchWithAuth(`${API_BASE_URL}/sections?class_id=${formData.class_id}`);
         const data = await res.json();
         setAvailableSections(data.sections || []);
       } catch (err) { console.error('Error fetching sections:', err); } 
@@ -194,7 +197,8 @@ const StudentFormWizard = ({ isOpen, onClose, onSuccess, editData, theme = 'dark
         guardian_phone: formData.guardian_phone ? normalizePhone(formData.guardian_phone) : null,
         guardian_email: formData.guardian_email || null,
       };
-      const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      // ✅ CHANGED TO fetchWithAuth
+      const response = await fetchWithAuth(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (response.ok) { onSuccess(); handleCancel(); } 
       else { showAlert(data.error || 'Failed to save student', 'error', 'Could Not Save'); }

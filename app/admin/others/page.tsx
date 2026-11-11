@@ -123,12 +123,15 @@ export default function OthersPage() {
   const handleAdd = async () => {
     if (!validateForm()) return;
     const apiEndpoint = modalFor === 'notice' ? 'notices' : 'events';
-    const payload: any = {
+    
+    // Changed from 'const payload: any = {' to 'const payload = {' to fix TS error
+    const payload : any = {
       title: formData.title,
       message: formData.message,
       date: formData.date,
       applicable_class: formData.applicable_class,
     };
+    
     if (modalType === 'modify' && selectedItem && selectedItem.id) {
       payload.id = selectedItem.id;
     }

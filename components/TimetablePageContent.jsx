@@ -216,20 +216,20 @@ export default function TimetablePageContent() {
   const handlePeriodChange = async (action, data) => {
     try {
       if (action === 'add') {
-        const res = await fetch(`${API_BASE_URL}/timetable/periods`, {
+        const res = await fetchWithAuth(`${API_BASE_URL}/timetable/periods`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ academic_year: DEFAULT_YEAR, label: data.label, start_time: data.start_time, end_time: data.end_time }),
         });
         const resData = await res.json();
         if (!res.ok) return showAlert(resData.error, 'error');
       } else if (action === 'delete') {
-        const res = await fetch(`${API_BASE_URL}/timetable/periods?id=${data.periodId}`, { method: 'DELETE' });
+        const res = await fetchWithAuth(`${API_BASE_URL}/timetable/periods?id=${data.periodId}`, { method: 'DELETE' });
         const resData = await res.json();
         if (!res.ok) return showAlert(resData.error, 'error');
       }
       
       if (selectedClass && selectedSection) {
-        const refreshRes = await fetch(`${API_BASE_URL}/timetable?class_id=${selectedClass}&section=${selectedSection}&academic_year=${DEFAULT_YEAR}`);
+        const refreshRes = await fetchWithAuth(`${API_BASE_URL}/timetable?class_id=${selectedClass}&section=${selectedSection}&academic_year=${DEFAULT_YEAR}`);
         setTimetable(await refreshRes.json());
         setHasUnsavedChanges(true); 
       }

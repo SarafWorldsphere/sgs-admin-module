@@ -5,6 +5,7 @@ import { ArrowLeft, Plus, X, Check } from 'lucide-react';
 import AlertModal from './AlertModal';
 import { isValidName, isValidEmail, isGmailEmail, isValidPhone, normalizePhone } from '../lib/validators';
 import { formatClassName } from '../lib/format-class-name';
+import { fetchWithAuth } from '../lib/fetchWithAuth'; // ✅ ADDED IMPORT
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
 
@@ -35,8 +36,8 @@ const TeacherFormPage = ({ mode = 'add', teacherId = '', onCancel, onSuccess }) 
     (async () => {
       try {
         const [clsRes, subjRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/classes`),
-          fetch(`${API_BASE_URL}/subjects`),
+          fetchWithAuth(`${API_BASE_URL}/classes`), // ✅ CHANGED
+          fetchWithAuth(`${API_BASE_URL}/subjects`), // ✅ CHANGED
         ]);
         const clsData = await clsRes.json();
         const subjData = await subjRes.json();
@@ -50,7 +51,7 @@ const TeacherFormPage = ({ mode = 'add', teacherId = '', onCancel, onSuccess }) 
     if (mode !== 'add') return;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/generate-id?type=teacher`);
+        const res = await fetchWithAuth(`${API_BASE_URL}/generate-id?type=teacher`); // ✅ CHANGED
         const data = await res.json();
         if (data.id) setFormData((prev) => ({ ...prev, teacher_id: data.id }));
       } catch (err) { console.error('Error generating teacher ID:', err); }
@@ -63,8 +64,8 @@ const TeacherFormPage = ({ mode = 'add', teacherId = '', onCancel, onSuccess }) 
       try {
         setLoading(true);
         const [tRes, mRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/teachers`),
-          fetch(`${API_BASE_URL}/teacher-class-map?teacher_id=${encodeURIComponent(teacherId)}`),
+          fetchWithAuth(`${API_BASE_URL}/teachers`), // ✅ CHANGED
+          fetchWithAuth(`${API_BASE_URL}/teacher-class-map?teacher_id=${encodeURIComponent(teacherId)}`), // ✅ CHANGED
         ]);
         const teachers = await tRes.json();
         const mapRows = await mRes.json();
@@ -137,7 +138,7 @@ const TeacherFormPage = ({ mode = 'add', teacherId = '', onCancel, onSuccess }) 
     if (!classId) return;
     if (sectionsByClass[classId]) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/sections?class_id=${classId}`);
+      const res = await fetchWithAuth(`${API_BASE_URL}/sections?class_id=${classId}`); // ✅ CHANGED
       const data = await res.json();
       setSectionsByClass((prev) => ({ ...prev, [classId]: data.sections || [] }));
     } catch (err) { setSectionsByClass((prev) => ({ ...prev, [classId]: [] })); }
@@ -201,7 +202,7 @@ const TeacherFormPage = ({ mode = 'add', teacherId = '', onCancel, onSuccess }) 
 
       const url = `${API_BASE_URL}/teachers`;
       const method = mode === 'edit' ? 'PUT' : 'POST';
-      const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const response = await fetchWithAuth(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); // ✅ CHANGED
       const data = await response.json();
       if (response.ok) { if (typeof onSuccess === 'function') onSuccess(); } 
       else { showAlert(data.error || 'Failed to save teacher', 'error', 'Could Not Save'); }

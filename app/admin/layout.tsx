@@ -27,7 +27,7 @@ function TokenHandler() {
     if (token) {
       // Save to sessionStorage
       sessionStorage.setItem('admin_token', token);
-      // Clean the URL
+      // Clean the URL so the token is not visible in the address bar
       router.replace(pathname);
     }
   }, [searchParams, router, pathname]);
@@ -42,6 +42,35 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const pathname = usePathname();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  // ✅ AUTH GUARD STATE
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // ✅ AUTH GUARD LOGIC
+  useEffect(() => {
+    // We check sessionStorage. If the token isn't there, we kick them out.
+    // Note: We wait a tiny bit to allow the TokenHandler to process the URL token if it exists.
+    const checkAuth = () => {
+      const token = sessionStorage.getItem('admin_token');
+      
+      // If there's a token in the URL, we let TokenHandler handle it (it will save to sessionStorage).
+      // We can check the URL directly here to avoid a redirect before TokenHandler runs.
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('token');
+
+      if (token || urlToken) {
+        setIsAuthenticated(true);
+      } else {
+        // No token -> Redirect to portal
+        // Replace this URL with your actual login portal URL
+        window.location.href = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL || 'https://staging.sgs.swais.in';
+      }
+      setIsCheckingAuth(false);
+    };
+
+    checkAuth();
+  }, [pathname]);
 
   // Auto-close mobile drawer on route change
   useEffect(() => {
@@ -141,6 +170,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   };
 
+  // ✅ 1. SHOW LOADING SCREEN WHILE CHECKING AUTH
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-white font-medium animate-pulse">Verifying Secure Session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ 2. PREVENT UI FLASH IF NOT AUTHENTICATED
+  if (!isAuthenticated) {
+    return null; // The useEffect above is already redirecting them to the portal
+  }
+
+  // ✅ 3. RENDER DASHBOARD IF AUTHENTICATED
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
       {/* ✅ Wrap the TokenHandler in Suspense to prevent Next.js build errors */}

@@ -7,7 +7,7 @@ import ConfirmModal from '../../../components/ConfirmModal';
 import AlertModal from '../../../components/AlertModal';
 import ViewModal from '../../../components/ViewModal';
 import { formatClassName } from '../../../lib/format-class-name';
-// Note: adjust this path if your components folder is located elsewhere
+// Corrected import path for the auth wrapper
 import { fetchWithAuth } from '../../../lib/fetchWithAuth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
@@ -40,6 +40,7 @@ export default function TeachersPage() {
   const fetchTeachers = async () => {
     try {
       setLoading(true);
+      // ✅ REPLACED: fetch() -> fetchWithAuth()
       const response = await fetchWithAuth(`${API_BASE_URL}/teachers`);
       const data = await response.json();
       setTeachers(Array.isArray(data) ? data : []);
@@ -53,6 +54,7 @@ export default function TeachersPage() {
 
   const fetchClasses = async () => {
     try {
+      // ✅ REPLACED: fetch() -> fetchWithAuth()
       const response = await fetchWithAuth(`${API_BASE_URL}/classes`);
       const data = await response.json();
       setAvailableClasses(Array.isArray(data) ? data : []);
@@ -63,6 +65,7 @@ export default function TeachersPage() {
 
   const fetchStats = async () => {
     try {
+      // ✅ REPLACED: fetch() -> fetchWithAuth()
       const response = await fetchWithAuth(`${API_BASE_URL}/teachers/stats`);
       const data = await response.json();
       setStatsData({
@@ -76,13 +79,13 @@ export default function TeachersPage() {
   };
 
   const handleToggleStatus = async (teacher) => {
-    // ... same as existing code
     const currentStatus = teacher.status || (teacher.is_active ? 'Active' : 'Inactive');
     const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
 
     setTeachers((prev) => prev.map((t) => t.teacher_id === teacher.teacher_id ? { ...t, status: newStatus, is_active: newStatus === 'Active' } : t));
 
     try {
+      // ✅ REPLACED: fetch() -> fetchWithAuth()
       const response = await fetchWithAuth(`${API_BASE_URL}/teachers`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teacher_id: teacher.teacher_id || teacher.id, status: newStatus }),
@@ -108,6 +111,7 @@ export default function TeachersPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
+      // ✅ REPLACED: fetch() -> fetchWithAuth()
       await fetchWithAuth(`${API_BASE_URL}/teachers?id=${deleteTarget}`, { method: 'DELETE' });
       fetchTeachers();
       fetchStats();
@@ -145,7 +149,6 @@ export default function TeachersPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-3 sm:p-6">
-      {/* ... existing header, stat cards, buttons, search, table ... */}
       <div className="max-w-7xl mx-auto">
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 flex items-center gap-2 sm:gap-3">
@@ -155,7 +158,7 @@ export default function TeachersPage() {
           <p className="text-white/60 text-sm sm:text-base">Manage all teachers, track their progress, and update records</p>
         </div>
 
-        {/* ... stat cards ... */}
+        {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
           <div className="bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl p-4 sm:p-6"><p className="text-white/80 text-sm">Total Teachers</p><p className="text-white text-3xl sm:text-4xl font-bold">{stats.total}</p><p className="text-white/60 text-xs sm:text-sm mt-2">Enrolled this year</p></div>
           <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-4 sm:p-6"><p className="text-white/80 text-sm">Active Teachers</p><p className="text-white text-3xl sm:text-4xl font-bold">{stats.active}</p><p className="text-white/60 text-xs sm:text-sm mt-2">Currently teaching</p></div>
@@ -175,7 +178,6 @@ export default function TeachersPage() {
         <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px]">
-              {/* table head ... */}
               <thead className="bg-white/10">
                 <tr>
                   <th className="px-3 sm:px-4 py-3 text-left text-white text-xs sm:text-sm font-medium">ID</th>
