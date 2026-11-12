@@ -1,12 +1,20 @@
 import { NextResponse } from 'next/server';
 import { sql } from '../../../../lib/db';
+import { verifyAdminToken } from '../../../../lib/auth-verify';
 
 // GET /api/teachers/stats
 // Total = not deleted (record_status != 'Deleted')
 // Active = is_active = true (and not deleted)
 // Inactive = is_active = false or NULL (and not deleted)
-export async function GET() {
+export async function GET(request) {
   try {
+    // 🛑 1. VERIFY JWT TOKEN (Security Check)
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid or missing token' }, { status: 401 });
+    }
+
+    // 🟢 2. RUN DATABASE QUERY
     const rows = await sql`
       SELECT 
         COUNT(*) FILTER (

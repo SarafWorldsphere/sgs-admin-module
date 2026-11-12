@@ -1,11 +1,19 @@
 import { NextResponse } from 'next/server';
 import { sql } from '../../../lib/db';
+import { verifyAdminToken } from '../../../lib/auth-verify';
 
 // GET /api/sections?class_id=18
 // Returns distinct sections that actually have students in this class.
 // Falls back to the class_master.section_name if no students yet.
 export async function GET(request) {
   try {
+    // 🛑 1. PROTECT THE ROUTE
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid or missing token' }, { status: 401 });
+    }
+
+    // 🟢 2. RUN DATABASE QUERY (Only if auth passes)
     const { searchParams } = new URL(request.url);
     const classIdParam = searchParams.get('class_id');
 

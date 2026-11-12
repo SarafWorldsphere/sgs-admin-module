@@ -5,8 +5,11 @@ import { verifyAdminToken } from '../../../lib/auth-verify';
 const DEFAULT_ACADEMIC_YEAR = '2026-27';
 
 export async function GET(request) {
+  // 🛑 1. SECURITY CHECK (Synchronous - no await needed if using jsonwebtoken.verify)
   const auth = verifyAdminToken(request);
-  if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+  }
 
   try {
     const { searchParams } = new URL(request.url);
@@ -80,13 +83,17 @@ export async function GET(request) {
       days,
     });
   } catch (error) {
+    console.error('Timetable GET Error:', error);
     return NextResponse.json({ error: 'Could not load timetable.' }, { status: 500 });
   }
 }
 
 export async function PUT(request) {
+  // 🛑 1. SECURITY CHECK
   const auth = verifyAdminToken(request);
-  if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+  }
 
   try {
     const body = await request.json();
@@ -134,6 +141,7 @@ export async function PUT(request) {
 
     return NextResponse.json({ success: true, saved: normalizedSlots.length });
   } catch (error) {
+    console.error('Timetable PUT Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -3,28 +3,36 @@ import { NextResponse } from 'next/server';
 export function middleware(request) {
   const { pathname } = request.nextUrl;
 
-  // ✅ CRITICAL: Do NOT block CSS, JS, Images, or API routes
+  // 1. ALLOW NEXT.JS STATIC ASSETS (CSS, JS, Images) - DO NOT BLOCK THESE
   if (
     pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
     pathname.startsWith('/static') ||
-    pathname.includes('.') // catches favicon.ico, images, etc.
+    pathname.includes('.')
   ) {
     return NextResponse.next();
   }
 
-  // Allow the page to load if there is a token in the URL
+  // 2. ALLOW API ROUTES TO PASS
+  // We let the API route itself handle the auth (via verifyAdminToken).
+  // If we block it here, the frontend won't get a clean 401 JSON response.
+  if (pathname.startsWith('/admin/api')) {
+    return NextResponse.next();
+  }
+
+  // 3. CHECK FOR TOKEN IN URL (The SSO Login Flow)
   const token = request.nextUrl.searchParams.get('token');
   if (token) {
     return NextResponse.next();
   }
 
-  // Let the client-side layout handle the rest (sessionStorage check)
+  // 4. BLOCK DIRECT URL ACCESS TO PAGES
+  // If a user pastes /admin/students, they have no token in URL.
+  // The frontend Layout will check sessionStorage and redirect them.
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '../../../lib/db';
+import { verifyAdminToken } from '../../../lib/auth-verify';
 
 // ============================================================================
 // HELPERS
@@ -119,8 +120,16 @@ async function reconcileParents(tx, studentId, parents) {
 // GET /api/students
 // ============================================================================
 
-export async function GET() {
+export async function GET(request) {
   try {
+    // 🛑 1. PROTECT THE ROUTE
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid or missing token' }, { status: 401 });
+    }
+
+    // 🟢 2. RUN DATABASE QUERY (Only if auth passes)
+    // I restored your original query which joins class master and filters correctly
     const students = await sql`
       SELECT 
         s.admission_no, s.full_name, s.class_id, s.section, s.roll_no,
@@ -137,10 +146,11 @@ export async function GET() {
         AND s.full_name != ''
       ORDER BY s.admission_no
     `;
+    
     return NextResponse.json(students);
   } catch (error) {
-    console.error('Database error:', error);
-    return NextResponse.json([], { status: 200 });
+    console.error('API Error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -150,6 +160,12 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    // 🛑 1. PROTECT THE ROUTE
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid or missing token' }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       admission_no, full_name, class_id, section, roll_no,
@@ -204,7 +220,7 @@ export async function POST(request) {
       }
     }
 
-        // Duplicate Roll No check
+    // Duplicate Roll No check
     if (roll_no && class_id && section) {
       const existingRoll = await sql`
         SELECT admission_no FROM sgs_student_master
@@ -224,7 +240,7 @@ export async function POST(request) {
     const parents = buildParentsFromPayload(body);
 
     const result = await sql.begin(async (tx) => {
-      // ✅ FIX (Madhuri): is_active = true on insert so Faculty + Parent can see the student
+      // ✅ FIX: is_active = true on insert so Faculty + Parent can see the student
       const studentRows = await tx`
         INSERT INTO sgs_student_master (
           admission_no, full_name, class_id, section, roll_no,
@@ -265,6 +281,12 @@ export async function POST(request) {
 
 export async function PUT(request) {
   try {
+    // 🛑 1. PROTECT THE ROUTE
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid or missing token' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { admission_no, status } = body;
 
@@ -382,6 +404,12 @@ export async function PUT(request) {
 
 export async function DELETE(request) {
   try {
+    // 🛑 1. PROTECT THE ROUTE
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid or missing token' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 

@@ -1,14 +1,24 @@
+
 import { NextResponse } from 'next/server';
 import { sql } from '../../../lib/db';
+import { verifyAdminToken } from '../../../lib/auth-verify';
 
 // ============================================================================
 // GET — return BOTH Active + Inactive (so the toggle is possible)
 // ============================================================================
 
-export async function GET() {
+export async function GET(request) {
   try {
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid or missing token' },
+        { status: 401 }
+      );
+    }
+
     const notices = await sql`
-      SELECT 
+      SELECT
         notice_id as id,
         notice_title as title,
         notice_text as message,
@@ -32,6 +42,14 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid or missing token' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { id, title, message, date, applicable_class } = body;
 
@@ -73,6 +91,14 @@ export async function POST(request) {
 
 export async function PUT(request) {
   try {
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid or missing token' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { id, status } = body;
 
@@ -107,6 +133,14 @@ export async function PUT(request) {
 
 export async function DELETE(request) {
   try {
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid or missing token' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 

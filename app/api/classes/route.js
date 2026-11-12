@@ -1,8 +1,17 @@
 import { NextResponse } from 'next/server';
+// Adjusted path: from app/api/classes/route.js, go up 3 levels to reach lib/
 import { sql } from '../../../lib/db';
+import { verifyAdminToken } from '../../../lib/auth-verify'; 
 
-export async function GET() {
+export async function GET(request) { // Added request parameter to read headers
   try {
+    // 🛑 1. PROTECT THE ROUTE
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid or missing token' }, { status: 401 });
+    }
+
+    // 🟢 2. RUN DATABASE QUERY (Only if auth passes)
     const rows = await sql`
       SELECT 
         class_id,

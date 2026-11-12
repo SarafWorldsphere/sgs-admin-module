@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '../../../lib/db';
+import { verifyAdminToken } from '../../../lib/auth-verify';
 
 // ---- Helpers -----------------------------------------------------------
 
@@ -123,15 +124,16 @@ async function replaceTeacherClassMap(tx, teacherId, rows) {
 
 // ============================================================================
 // GET /api/teachers
-// - Hides ONLY record_status = 'Deleted' (per Bhuvan).
-// - Includes aggregated "assignments" array per teacher, built from
-//   sgs_teacher_class_map. Falls back to a single assignment built from
-//   teacher_master (class_id + section_1 + subjects) if the teacher has no
-//   map rows yet.
 // ============================================================================
 
-export async function GET() {
+export async function GET(request) {
   try {
+    // 🛑 AUTH CHECK
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid or missing token' }, { status: 401 });
+    }
+
     const teachers = await sql`
       SELECT 
         teacher_id as id,
@@ -154,7 +156,6 @@ export async function GET() {
       ORDER BY teacher_id
     `;
 
-    // Fetch all map rows in one query — keyed by teacher_id
     const mapRows = await sql`
       SELECT teacher_id, class_id, section, subject_name, is_class_teacher
       FROM sgs_teacher_class_map
@@ -162,7 +163,6 @@ export async function GET() {
       ORDER BY teacher_id, class_id, section, subject_name
     `;
 
-    // Group map rows by teacher
     const byTeacher = new Map();
     for (const r of mapRows) {
       const tid = String(r.teacher_id);
@@ -199,7 +199,6 @@ export async function GET() {
           });
         }
       } else if (t.class_id) {
-        // Legacy: teacher has class_id in master but no map rows yet
         assignments.push({
           class_id: String(t.class_id),
           section: String(t.section_1 || ''),
@@ -232,6 +231,12 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    // 🛑 AUTH CHECK
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid or missing token' }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       teacher_id, name, subject, qualification, class_id,
@@ -346,12 +351,16 @@ export async function POST(request) {
 
 // ============================================================================
 // PUT /api/teachers
-// - Status-only toggle touches ONLY is_active (per Bhuvan).
-// - Full update writes all fields including class_map.
 // ============================================================================
 
 export async function PUT(request) {
   try {
+    // 🛑 AUTH CHECK
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid or missing token' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { teacher_id, status } = body;
 
@@ -359,7 +368,7 @@ export async function PUT(request) {
       return NextResponse.json({ error: 'Teacher ID is required' }, { status: 400 });
     }
 
-    // ---- STATUS-ONLY TOGGLE (is_active only — no record_status) ----
+    // ---- STATUS-ONLY TOGGLE ----
     if (status !== undefined && !body.name) {
       const newStatus = status === 'Active';
       const result = await sql`
@@ -475,12 +484,16 @@ export async function PUT(request) {
 
 // ============================================================================
 // DELETE /api/teachers
-// - Sets BOTH record_status = 'Deleted' AND is_active = false
-//   (per Bhuvan: faculty login only checks is_active, so both must be set).
 // ============================================================================
 
 export async function DELETE(request) {
   try {
+    // 🛑 AUTH CHECK
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid or missing token' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
