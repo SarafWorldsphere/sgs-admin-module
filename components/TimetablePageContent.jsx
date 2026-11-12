@@ -5,6 +5,7 @@ import { Save, AlertCircle, RefreshCw, BookOpen, User, Download, Upload } from '
 import TimetableGrid from './TimetableGrid';
 import AlertModal from './AlertModal';
 import { formatClassName } from '../lib/format-class-name';
+// ✅ Importing the auth wrapper
 import { fetchWithAuth } from '../lib/fetchWithAuth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/admin/api';
@@ -43,7 +44,10 @@ export default function TimetablePageContent() {
         const tData = await tRes.json();
         setClasses(Array.isArray(cData) ? cData : []);
         setTeachers(Array.isArray(tData) ? tData : []);
-      } catch (err) { console.error(err); }
+      } catch (err) { 
+        // fetchWithAuth handles 401 redirects. We only log actual network errors here.
+        console.error('Error loading initial data:', err); 
+      }
     })();
   }, []);
 
@@ -56,7 +60,9 @@ export default function TimetablePageContent() {
         setSectionsByClass((prev) => ({ ...prev, [selectedClass]: data.sections || [] }));
         setSelectedSection('');
         setTimetable(null);
-      } catch (err) {}
+      } catch (err) {
+        console.error('Error fetching sections:', err);
+      }
     })();
   }, [selectedClass, viewMode]);
 
@@ -72,10 +78,18 @@ export default function TimetablePageContent() {
           ]);
           const ttData = await ttRes.json();
           const asData = await asRes.json();
-          if (!ttData || ttData.error) throw new Error(ttData?.error || 'Failed to load timetable');
+          
+          if (!ttRes.ok) throw new Error(ttData?.error || 'Failed to load timetable');
+          
           setTimetable(ttData);
           setAssignments(Array.isArray(asData.assignments) ? asData.assignments : []);
-        } catch (err) { showAlert(err.message, 'error', 'Load Failed'); } finally { setLoading(false); }
+        } catch (err) { 
+          // If it's a 401, fetchWithAuth already triggered a redirect. 
+          // Only show alert if it's an actual data error.
+          if (err.message !== 'Unauthorized') {
+            showAlert(err.message, 'error', 'Load Failed'); 
+          }
+        } finally { setLoading(false); }
       })();
     } else {
       if (!selectedTeacher) { setTimetable(null); return; }
@@ -84,7 +98,9 @@ export default function TimetablePageContent() {
         try {
           const res = await fetchWithAuth(`${API_BASE_URL}/timetable/teacher?teacher_id=${selectedTeacher}&academic_year=${DEFAULT_YEAR}`);
           const data = await res.json();
-          if (!data || data.error) throw new Error(data?.error || 'Failed to load teacher');
+          
+          if (!res.ok) throw new Error(data?.error || 'Failed to load teacher');
+          
           const days = [1,2,3,4,5,6].map(dow => ({
             day_of_week: dow,
             day_name: DAYS[dow-1],
@@ -94,7 +110,11 @@ export default function TimetablePageContent() {
             }))
           }));
           setTimetable({ periods: data.periods, days });
-        } catch (err) { showAlert(err.message, 'error', 'Load Failed'); } finally { setLoading(false); }
+        } catch (err) { 
+          if (err.message !== 'Unauthorized') {
+            showAlert(err.message, 'error', 'Load Failed'); 
+          }
+        } finally { setLoading(false); }
       })();
     }
   }, [viewMode, selectedClass, selectedSection, selectedTeacher]);
@@ -130,7 +150,9 @@ export default function TimetablePageContent() {
       } else {
         showAlert(data.error || 'Failed to save.', 'error', 'Save Failed');
       }
-    } catch (err) { showAlert('Network error.', 'error'); } finally { setSaving(false); }
+    } catch (err) { 
+      if (err.message !== 'Unauthorized') showAlert('Network error.', 'error'); 
+    } finally { setSaving(false); }
   };
 
   const handleExport = async () => {
@@ -233,9 +255,10 @@ export default function TimetablePageContent() {
         setTimetable(await refreshRes.json());
         setHasUnsavedChanges(true); 
       }
-      // ✅ FIX 1: Proper Title for Success
       showAlert(`Period ${action === 'add' ? 'added' : 'deleted'} successfully.`, 'success', 'Success');
-    } catch (err) { showAlert('Network error.', 'error'); }
+    } catch (err) { 
+      if (err.message !== 'Unauthorized') showAlert('Network error.', 'error'); 
+    }
   };
 
   const availableSections = sectionsByClass[selectedClass] || [];

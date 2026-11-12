@@ -1,10 +1,20 @@
+
 import { NextResponse } from 'next/server';
 import { sql } from '../../../lib/db';
+import { verifyAdminToken } from '../../../lib/auth-verify';
 
 // GET /api/teacher-class-map?teacher_id=T001
 // Returns the teacher's class map rows (Active only).
 export async function GET(request) {
   try {
+    const admin = await verifyAdminToken(request);
+    if (!admin) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid or missing token' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const teacherId = (searchParams.get('teacher_id') || '').trim();
 
