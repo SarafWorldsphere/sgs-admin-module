@@ -9,7 +9,7 @@ import jwt from 'jsonwebtoken';
 //
 // Neither falls back to a literal: a published default would mean a deployment
 // that forgot to set it still issued tokens anyone could forge.
-const JWT_SECRET = process.env.AUTH_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET;
 const SSO_SECRET = process.env.SGS_SSO_SECRET;
 
 export async function POST(request) {
