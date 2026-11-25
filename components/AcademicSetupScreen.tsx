@@ -1,16 +1,16 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, GraduationCap, Plus, Trash2, Save, RefreshCw, ArrowRight } from 'lucide-react';
-import { emptyYear, sameYear, positiveId, yearPayload, apiError } from '../lib/academic-setup.mjs';
+import { emptyYear, sameYear, positiveId, yearPayload, apiError, academicSetupApiUrl } from '../lib/academic-setup.mjs';
 type Year = { board_id: string | number; calendar_id: string | number; academic_year: string; start_date: string; end_date: string; school_year_id?: number };
 type Board = { board_id: number; board_name: string; description?: string };
 type Calendar = { calendar_id: number; calendar_name: string; description?: string; academic_year: string };
 type Holiday = { holiday_id: number; holiday_date: string; reason: string };
-const input = 'w-full rounded-xl border border-white/15 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none focus:border-indigo-400 disabled:opacity-50 [color-scheme:dark]';
-const button = 'inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40';
-const panel = 'rounded-2xl border border-white/10 bg-slate-900/70 p-5 sm:p-7';
+const input = 'w-full rounded-xl border border-white/20 bg-white/10 px-3.5 py-3 text-sm text-white placeholder-white/40 outline-none focus:border-white/40 disabled:opacity-50 [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white';
+const button = 'inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40';
+const panel = 'rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-7';
 async function api(path: string, method = 'GET', body?: object) {
-  const response = await fetch(`/admin/api/academic-setup/${path}`, { method, credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  const response = await fetch(academicSetupApiUrl(path, process.env.NEXT_PUBLIC_APP_BASE_PATH || ''), { method, credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
   if (response.status === 204) return null;
   const data = await response.json().catch(() => null);
   if (!response.ok) throw Object.assign(Error(apiError(data, response.status)), { status: response.status });
@@ -94,7 +94,7 @@ export default function AcademicSetupScreen() {
       setHolidayDate(''); setReason(''); setMessage('Holiday added.');
     });
   }
-  return <main className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 px-4 py-8 text-slate-100 sm:px-8"><div className="mx-auto max-w-5xl space-y-6">
+  return <main className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-4 py-8 text-white sm:px-8"><div className="mx-auto max-w-5xl space-y-6">
     <header className="flex flex-wrap items-center justify-between gap-4"><div><p className="mb-2 text-xs font-semibold uppercase tracking-widest text-indigo-300">School administration</p><h1 className="text-3xl font-bold">Academic setup</h1><p className="mt-2 text-sm text-slate-300">Set the school year, local holidays and syllabus plan.</p></div><button className={button} disabled={busy || loading} onClick={reload}><RefreshCw size={16} />Reload</button></header>
     {error && <div role="alert" className="rounded-xl border border-red-400/40 bg-red-950/60 p-4 text-red-100">{error}</div>}
     {message && <div role="status" className="rounded-xl border border-emerald-400/30 bg-emerald-950/50 p-4 text-emerald-100">{message}</div>}

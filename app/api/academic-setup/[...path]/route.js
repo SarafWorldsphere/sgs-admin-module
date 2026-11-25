@@ -1,4 +1,5 @@
 import { allowedRequest, plannerTarget, plannerAuth } from '../../../../lib/academic-setup-proxy.mjs';
+import { plannerRequest } from '../../../../lib/planner-request.mjs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,13 +18,16 @@ async function proxy(request, context) {
   }
   const host = request.headers.get('host') || incoming.host;
   try {
-    const response = await fetch(upstream, {
-      method: request.method, cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(15000),
+    const response = await plannerRequest(upstream, {
+      method: request.method,
       headers: { Authorization: authorization, 'Content-Type': 'application/json', Host: host, 'X-Forwarded-Host': host },
       ...(request.method === 'POST' ? { body: await request.text() } : {}),
     });
     if (response.status === 204) return new Response(null, { status: 204 });
-    const body = await response.json().catch(() => ({ detail: 'Planner service returned an unexpected response.' }));
+    let body;
+    try { body = JSON.parse(response.text); }
+    catch { body = { detail: 'Planner service returned an unexpected response.' }; }
+    if (response.status >= 300 && response.status < 400) return Response.json({ detail: 'Planner service returned an unexpected redirect.' }, { status: 502 });
     if (response.status >= 500) return Response.json({ detail: 'Planner service is unavailable. Please contact the administrator.' }, { status: 502 });
     return Response.json(body, { status: response.status, headers: { 'Cache-Control': 'no-store' } });
   } catch {
