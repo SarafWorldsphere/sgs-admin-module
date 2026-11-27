@@ -13,7 +13,7 @@ No sidebar or Syllabus Plan screen changes are included. Krithi owns those chang
 Start the planner API separately, then set this **server-only** environment variable for the Admin Node process:
 
 ```dotenv
-SYLLABUS_PLANNER_API_URL=http://127.0.0.1:8010/api/v1
+SYLLABUS_PLANNER_API_URL=http://127.0.0.1:4110/api/v1
 SYLLABUS_PLANNER_DEV_AUTH=false
 ```
 
@@ -22,6 +22,10 @@ The browser's API prefix comes from `NEXT_PUBLIC_APP_BASE_PATH`, which `next.con
 An allowlisted server proxy forwards the request's bearer token or HttpOnly `admin_token` cookie and preserves Host for school resolution. It uses Node's HTTP transport because native fetch rewrites Host to the upstream address. Calls have a 15-second timeout, a 2 MiB response limit and never follow redirects. HTTPS verifies the upstream hostname independently of the school Host. The planner must accept the token's signing key, role and tenant claims. This change does not mint a new SSO token or change existing login behaviour. Missing configuration, rejected auth and unavailable services are shown as errors, not successful saves.
 
 The screen uses the existing Admin layout/Students palette: `from-slate-900 via-indigo-950 to-slate-900`, translucent white cards/controls, and blue/cyan action buttons. Shared layout/sidebar colours are unchanged.
+
+Krithi's Syllabus Plan screen can use this same proxy for `GET syllabus-plan/unmatched?class_id=<id>&subject_id=<id>` and `PATCH syllabus-plan/<positive-plan-id>`. PATCH sends its JSON body unchanged (including `version_no` for optimistic locking). Only `class_id` and `subject_id` are forwarded for the unmatched list; calendar filters remain limited to `academic_year` and `region`. Other operations and query parameters remain blocked. Both calls retain the existing session and school Host checks.
+
+Port 4110 is the deployed planner service. If a local planner is started on a different port (for example 8010), point the local server-only setting at that port instead. Editing the deployed `.env` is a separate operator step; the actual `.env` file is never committed.
 
 For local `npm run dev` testing only, explicitly setting `SYLLABUS_PLANNER_DEV_AUTH=true` substitutes the backend's development `dev-admin` stand-in **only** for a loopback API URL and `NODE_ENV=development`. Production builds never use it. Existing Admin middleware still requires a session. Do not use this stand-in for deployed authentication.
 
