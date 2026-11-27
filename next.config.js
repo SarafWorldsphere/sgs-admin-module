@@ -20,4 +20,10 @@ const nextConfig = {
   staticPageGenerationTimeout: 120,
 };
 
+// Keep browser API URLs aligned with Next's configured mount point at build time.
+nextConfig.env = {
+  ...nextConfig.env,
+  NEXT_PUBLIC_APP_BASE_PATH: nextConfig.basePath || '',
+};
+
 module.exports = nextConfig;
