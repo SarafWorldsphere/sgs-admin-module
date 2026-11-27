@@ -124,3 +124,4 @@ aider.conf.yml
 *.ai.json
 .aiignore
 check-student.mjs
+sgs-admin-module/
