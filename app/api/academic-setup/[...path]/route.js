@@ -1,4 +1,4 @@
-import { allowedRequest, plannerTarget, plannerAuth } from '../../../../lib/academic-setup-proxy.mjs';
+import { allowedRequest, plannerTarget, plannerAuth, plannerQuery } from '../../../../lib/academic-setup-proxy.mjs';
 import { plannerRequest } from '../../../../lib/planner-request.mjs';
 
 export const runtime = 'nodejs';
@@ -13,15 +13,13 @@ async function proxy(request, context) {
   if (!authorization) return Response.json({ detail: 'Planner authentication required.' }, { status: 401 });
   const upstream = new URL(`${target.pathname.replace(/\/$/, '')}/${path.join('/')}`, target.origin);
   const incoming = new URL(request.url);
-  if (path.join('/') === 'calendars') for (const key of ['academic_year', 'region']) {
-    if (incoming.searchParams.has(key)) upstream.searchParams.set(key, incoming.searchParams.get(key));
-  }
+  upstream.search = plannerQuery(path, incoming.searchParams).toString();
   const host = request.headers.get('host') || incoming.host;
   try {
     const response = await plannerRequest(upstream, {
       method: request.method,
       headers: { Authorization: authorization, 'Content-Type': 'application/json', Host: host, 'X-Forwarded-Host': host },
-      ...(request.method === 'POST' ? { body: await request.text() } : {}),
+      ...(['POST', 'PATCH'].includes(request.method) ? { body: await request.text() } : {}),
     });
     if (response.status === 204) return new Response(null, { status: 204 });
     let body;
@@ -34,4 +32,4 @@ async function proxy(request, context) {
     return Response.json({ detail: 'Cannot reach the planner service. Check its URL and whether it is running.' }, { status: 502 });
   }
 }
-export { proxy as GET, proxy as POST, proxy as DELETE };
+export { proxy as GET, proxy as POST, proxy as PATCH, proxy as DELETE };
