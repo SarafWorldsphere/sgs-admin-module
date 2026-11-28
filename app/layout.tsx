@@ -17,7 +17,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      {/*
+        The dark background belongs on the body, not on each page.
+
+        Every screen in this module is designed for a dark theme — the student
+        dashboard, for instance, is text-white on text-white/60. This layout
+        set no background at all, so those pages rendered white text on the
+        browser's default white: the page looked completely blank while the
+        markup was present and correct the whole time.
+
+        The pages that did look right, such as the students console, were
+        painting their own dark background and so did not depend on this.
+
+        These are the colours from app/layout.js, which this file shadows —
+        two root layouts exist in this folder and only this one is used.
+      */}
+      <body className={`${inter.className} min-h-screen bg-[#0a0a0f] text-slate-200`}>
         <AuthProvider>
           {children}
         </AuthProvider>
