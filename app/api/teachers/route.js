@@ -139,26 +139,15 @@ export async function GET(request) {
   }
   try {
     const teachers = await sql`
-      SELECT 
-        teacher_id as id,
-        full_name as name,
-        subject_name as subject,
-        qualification,
-        class_id,
-        section_1,
-        section_2,
-        role,
-        is_class_teacher,
-        subjects,
-        phone as contact,
-        email_id as email,
-        is_active,
-        record_status,
-        CASE WHEN is_active = true THEN 'Active' ELSE 'Inactive' END as status
-      FROM teacher_master
-      WHERE (record_status IS NULL OR record_status != 'Deleted')
-      ORDER BY teacher_id
-    `;
+  SELECT 
+    t.*,
+    c.class_name,
+    c.section_name
+  FROM teacher_master t
+  LEFT JOIN teacher_class_subject_map m ON m.teacher_id = t.teacher_id
+  LEFT JOIN class_master c ON c.class_id = m.class_id
+  WHERE t.record_status IS NOT NULL
+`;
 
     // Fetch all map rows in one query — keyed by teacher_id
     const mapRows = await sql`

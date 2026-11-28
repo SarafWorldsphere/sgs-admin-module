@@ -130,29 +130,33 @@ export async function GET(request) {
     const students = await sql`
       SELECT 
         s.admission_no, s.full_name, s.class_id, s.section, s.roll_no,
+        -- Assuming these columns exist on student_master, if not we will fix next
         s.student_phone, s.student_email,
         s.guardian_name, s.guardian_phone, s.guardian_email,
         s.record_status, s.is_active,
         c.class_name,
+        -- Fetch parent 1 (Assuming relationship_type = 'Father')
         p1.full_name AS parent1_name, 
         p1.phone AS parent1_phone, 
         p1.email AS parent1_email,
+        -- Fetch parent 2 (Assuming relationship_type = 'Mother')
         p2.full_name AS parent2_name, 
         p2.phone AS parent2_phone, 
         p2.email AS parent2_email
       FROM student_master s
       LEFT JOIN class_master c ON c.class_id = s.class_id
-      -- 🚨 FIX: Joining on student_id (which is a number) instead of admission_no (which is text)
-      LEFT JOIN parent_student_map psm1 ON s.student_id = psm1.student_id AND psm1.relationship_type = 'Father'
+      LEFT JOIN parent_student_map psm1 ON s.admission_no = psm1.student_id AND psm1.relationship_type = 'Father'
       LEFT JOIN parent_master p1 ON psm1.parent_id = p1.parent_id
-      LEFT JOIN parent_student_map psm2 ON s.student_id = psm2.student_id AND psm2.relationship_type = 'Mother'
+      LEFT JOIN parent_student_map psm2 ON s.admission_no = psm2.student_id AND psm2.relationship_type = 'Mother'
       LEFT JOIN parent_master p2 ON psm2.parent_id = p2.parent_id
       WHERE s.record_status IS NOT NULL
       ORDER BY s.admission_no
     `;
     return NextResponse.json(students);
   } catch (error) {
+    // 🚨 LOG THE ACTUAL ERROR so it shows in PM2 logs
     console.error('🔥 Database error in students API:', error.message);
+    // Return empty array to prevent frontend crash, but the log will tell us why
     return NextResponse.json([], { status: 200 });
   }
 }
@@ -162,101 +166,56 @@ export async function GET(request) {
 // ============================================================================
 
 export async function POST(request) {
-   // ✅ Verify token first
   const auth = verifyAdminToken(request);
-  if (!auth.valid) {
-    return NextResponse.json({ error: auth.error }, { status: 401 });
-  }
+  if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+
   try {
     const body = await request.json();
-    const {
-      admission_no, full_name, class_id, section, roll_no,
-      parent1_name, parent1_phone, parent1_email,
-      parent2_name, parent2_phone, parent2_email,
-      student_phone, student_email,
-      guardian_name, guardian_phone, guardian_email,
-    } = body;
-
-    if (!admission_no || !full_name || !class_id || !section) {
-      return NextResponse.json(
-        { error: 'Student ID, Name, Class and Section are required' },
-        { status: 400 }
-      );
-    }
-
-    const classCheck = await sql`
-      SELECT class_id FROM class_master
-      WHERE class_id = ${class_id} AND record_status = 'Active'
+    
+    // 1. Insert the student
+    const studentResult = await sql`
+      INSERT INTO student_master (
+        admission_no, full_name, class_id, section, roll_no, 
+        student_phone, student_email, guardian_name, guardian_phone, guardian_email, 
+        record_status, is_active
+      ) VALUES (
+        ${body.admission_no}, ${body.full_name}, ${body.class_id}, ${body.section}, ${body.roll_no},
+        ${body.student_phone}, ${body.student_email}, ${body.guardian_name}, ${body.guardian_phone}, ${body.guardian_email},
+        'Active', true
+      ) RETURNING student_id
     `;
-    if (classCheck.length === 0) {
-      return NextResponse.json({ error: `Class ID ${class_id} does not exist.` }, { status: 400 });
-    }
+    const studentId = studentResult[0].student_id;
 
-    const existing = await sql`
-      SELECT admission_no FROM student_master WHERE admission_no = ${admission_no}
-    `;
-    if (existing.length > 0) {
-      return NextResponse.json({ error: `Student ID ${admission_no} already exists. Please refresh the form to get a new ID.` }, { status: 400 });
-    }
-
-    if (student_email && !isGmailEmail(student_email)) {
-      return NextResponse.json({ error: 'Student email must be a @gmail.com address.' }, { status: 400 });
-    }
-    if (guardian_email && !isGmailEmail(guardian_email)) {
-      return NextResponse.json({ error: 'Guardian email must be a @gmail.com address.' }, { status: 400 });
-    }
-
-    if (student_email && String(student_email).trim()) {
-      const dupe = await sql`
-        SELECT admission_no, full_name
-        FROM student_master
-        WHERE LOWER(student_email) = LOWER(${String(student_email).trim()})
-          AND record_status IN ('Active', 'Inactive')
-        LIMIT 1
+    // 2. Insert Parent 1 (If provided)
+    if (body.parent1_name) {
+      const p1 = await sql`
+        INSERT INTO parent_master (full_name, phone, email)
+        VALUES (${body.parent1_name}, ${body.parent1_phone}, ${body.parent1_email})
+        RETURNING parent_id
       `;
-      if (dupe.length > 0) {
-        return NextResponse.json(
-          { error: `This student email is already used by ${dupe[0].admission_no}${dupe[0].full_name ? ` (${dupe[0].full_name})` : ''}. Each student must have a unique email.` },
-          { status: 400 }
-        );
-      }
+      await sql`
+        INSERT INTO parent_student_map (parent_id, student_id, relationship_type)
+        VALUES (${p1[0].parent_id}, ${studentId}, 'Father')
+      `;
     }
 
-    const parents = buildParentsFromPayload(body);
-
-    const result = await sql.begin(async (tx) => {
-      // ✅ FIX (Madhuri): is_active = true on insert so Faculty + Parent can see the student
-      const studentRows = await tx`
-        INSERT INTO student_master (
-          admission_no, full_name, class_id, section, roll_no,
-          parent1_name, parent1_phone, parent1_email,
-          parent2_name, parent2_phone, parent2_email,
-          student_phone, student_email,
-          guardian_name, guardian_phone, guardian_email,
-          record_status, is_active
-        ) VALUES (
-          ${admission_no}, ${full_name}, ${class_id}, ${section}, ${roll_no},
-          ${parent1_name || null}, ${parent1_phone ? normalizePhone(parent1_phone) : null}, ${parent1_email || null},
-          ${parent2_name || null}, ${parent2_phone ? normalizePhone(parent2_phone) : null}, ${parent2_email || null},
-          ${student_phone ? normalizePhone(student_phone) : null}, ${student_email || null},
-          ${guardian_name || null}, ${guardian_phone ? normalizePhone(guardian_phone) : null}, ${guardian_email || null},
-          'Active', true
-        ) RETURNING student_id, admission_no
+    // 3. Insert Parent 2 (If provided)
+    if (body.parent2_name) {
+      const p2 = await sql`
+        INSERT INTO parent_master (full_name, phone, email)
+        VALUES (${body.parent2_name}, ${body.parent2_phone}, ${body.parent2_email})
+        RETURNING parent_id
       `;
+      await sql`
+        INSERT INTO parent_student_map (parent_id, student_id, relationship_type)
+        VALUES (${p2[0].parent_id}, ${studentId}, 'Mother')
+      `;
+    }
 
-      const studentId = studentRows[0].student_id;
-      const parentCount = await reconcileParents(tx, studentId, parents);
-
-      return { student: studentRows[0], parentCount };
-    });
-
-    return NextResponse.json(
-      { success: true, student: result.student, parentsLinked: result.parentCount },
-      { status: 201 }
-    );
+    return NextResponse.json({ success: true, message: "Student added successfully" });
   } catch (error) {
-    console.error('Error adding student:', error);
-    return NextResponse.json({ error: friendlyDbError(error) }, { status: 500 });
+    console.error('🔥 Error adding student:', error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 

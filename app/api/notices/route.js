@@ -7,33 +7,28 @@ import { verifyAdminToken } from '../../../lib/auth-verify'; // ✅ Import helpe
 // ============================================================================
 
 export async function GET(request) {
-  // ✅ Verify token first
   const auth = verifyAdminToken(request);
-  if (!auth.valid) {
-    return NextResponse.json({ error: auth.error }, { status: 401 });
-  }
+  if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
-s
   try {
     const notices = await sql`
       SELECT 
-        notice_id as id,
-        notice_title as title,
-        notice_text as message,
-        notice_date as date,
-        applicable_class,
-        record_status as status
-      FROM sgs_notice_board
-      WHERE record_status IN ('Active', 'Inactive')
-      ORDER BY notice_date DESC, notice_id DESC
+        notice_id as id, 
+        title, 
+        message, 
+        created_at as date, 
+        class_id, 
+        record_status 
+      FROM notice_board 
+      WHERE record_status IS DISTINCT FROM 'Deleted'
+      ORDER BY created_at DESC
     `;
     return NextResponse.json(notices);
   } catch (error) {
-    console.error('Database error:', error);
+    console.error('🔥 Error fetching notices:', error.message);
     return NextResponse.json([], { status: 200 });
   }
 }
-
 // ============================================================================
 // POST — insert new OR update existing (id present)
 // ============================================================================
