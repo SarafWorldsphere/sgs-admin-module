@@ -12,15 +12,8 @@ export async function GET(request) {
 
   try {
     const notices = await sql`
-      SELECT 
-        notice_id as id, 
-        title, 
-        message, 
-        created_at as date, 
-        class_id, 
-        record_status 
-      FROM notice_board 
-      WHERE record_status IS DISTINCT FROM 'Deleted'
+      SELECT * FROM notice_board 
+      WHERE record_status IS NOT NULL
       ORDER BY created_at DESC
     `;
     return NextResponse.json(notices);

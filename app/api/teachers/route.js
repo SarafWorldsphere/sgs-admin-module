@@ -146,7 +146,7 @@ export async function GET(request) {
   FROM teacher_master t
   LEFT JOIN teacher_class_subject_map m ON m.teacher_id = t.teacher_id
   LEFT JOIN class_master c ON c.class_id = m.class_id
-  WHERE t.record_status IS NOT NULL
+  WHERE t.is_active = true
 `;
 
     // Fetch all map rows in one query — keyed by teacher_id

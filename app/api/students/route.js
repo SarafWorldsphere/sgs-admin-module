@@ -144,10 +144,9 @@ export async function GET(request) {
         p2.phone AS parent2_phone, 
         p2.email AS parent2_email
       FROM student_master s
-      LEFT JOIN class_master c ON c.class_id = s.class_id
-      LEFT JOIN parent_student_map psm1 ON s.admission_no = psm1.student_id AND psm1.relationship_type = 'Father'
+      LEFT JOIN parent_student_map psm1 ON s.student_id = psm1.student_id AND psm1.relationship_type = 'Father'
       LEFT JOIN parent_master p1 ON psm1.parent_id = p1.parent_id
-      LEFT JOIN parent_student_map psm2 ON s.admission_no = psm2.student_id AND psm2.relationship_type = 'Mother'
+      LEFT JOIN parent_student_map psm2 ON s.student_id = psm2.student_id AND psm2.relationship_type = 'Mother'
       LEFT JOIN parent_master p2 ON psm2.parent_id = p2.parent_id
       WHERE s.record_status IS NOT NULL
       ORDER BY s.admission_no
