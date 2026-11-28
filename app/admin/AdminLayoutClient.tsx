@@ -46,12 +46,12 @@ export default function AdminLayoutClient({
 
   // FIX: Removed '/admin' from paths because basePath is already '/admin'
   const menuItems = [
-    { id: 'teachers', name: 'Teachers', icon: BookOpen, path: '/teachers', color: 'from-green-500 to-emerald-500' },
-    { id: 'students', name: 'Students', icon: Users, path: '/students', color: 'from-blue-500 to-cyan-500' },
-    { id: 'timetable', name: 'Timetable', icon: Calendar, path: '/timetable', color: 'from-orange-500 to-red-500' },
-    { id: 'academic-setup', name: 'Academic Setup', icon: Calendar, path: '/academic-setup', color: 'from-orange-500 to-amber-500' },
-    { id: 'syllabus-plan', name: 'Syllabus Plan', icon: ClipboardList, path: '/syllabus-plan', color: 'from-indigo-500 to-blue-500' },
-    { id: 'others', name: 'Others', icon: Settings, path: '/others', color: 'from-purple-500 to-pink-500' },
+    { id: 'teachers', name: 'Teachers', icon: BookOpen, path: '/admin/teachers', color: 'from-green-500 to-emerald-500' },
+    { id: 'students', name: 'Students', icon: Users, path: '/admin/students', color: 'from-blue-500 to-cyan-500' },
+    { id: 'timetable', name: 'Timetable', icon: Calendar, path: '/admin/timetable', color: 'from-orange-500 to-red-500' },
+    { id: 'academic-setup', name: 'Academic Setup', icon: Calendar, path: '/admin/academic-setup', color: 'from-orange-500 to-amber-500' },
+    { id: 'syllabus-plan', name: 'Syllabus Plan', icon: ClipboardList, path: '/admin/syllabus-plan', color: 'from-indigo-500 to-blue-500' },
+    { id: 'others', name: 'Others', icon: Settings, path: '/admin/others', color: 'from-purple-500 to-pink-500' },
   ];
 
   const SidebarContent = ({ isMobile = false }) => {
@@ -96,7 +96,7 @@ export default function AdminLayoutClient({
             {menuItems.map((item) => {
               const isActive = pathname === item.path;
               return (
-                <Link href={item.path} key={item.id}>
+                <a href={item.path} key={item.id}>
                   <motion.div
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all cursor-pointer ${
                       isActive 
@@ -109,7 +109,7 @@ export default function AdminLayoutClient({
                     <item.icon size={20} />
                     {isExpanded && <span className="font-medium">{item.name}</span>}
                   </motion.div>
-                </Link>
+                </a>
               );
             })}
           </nav>
