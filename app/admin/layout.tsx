@@ -9,7 +9,9 @@ import {
   Settings,
   Menu,
   X,
-  LogOut
+  LogOut,
+  Calendar,
+  ClipboardList
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -46,7 +48,9 @@ export default function AdminLayout({
   const menuItems = [
     { id: 'teachers', name: 'Teachers', icon: BookOpen, path: '/admin/teachers', color: 'from-green-500 to-emerald-500' },
     { id: 'students', name: 'Students', icon: Users, path: '/admin/students', color: 'from-blue-500 to-cyan-500' },
-    { id: 'others', name: 'Others', icon: Settings, path: '/admin/others',color: 'from-purple-500 to-pink-500' },
+    { id: 'academic-setup', name: 'Academic Setup', icon: Calendar, path: '/admin/academic-setup', color: 'from-orange-500 to-amber-500' },
+    { id: 'syllabus-plan', name: 'Syllabus Plan', icon: ClipboardList, path: '/admin/syllabus-plan', color: 'from-indigo-500 to-blue-500' },
+    { id: 'others', name: 'Others', icon: Settings, path: '/admin/others', color: 'from-purple-500 to-pink-500' },
   ];
 
   // Shared sidebar content (used by both desktop rail and mobile drawer)
