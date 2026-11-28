@@ -11,11 +11,10 @@ export async function GET(request) {
   if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
   try {
-    const notices = await sql`
-      SELECT * FROM notice_board 
-      WHERE record_status IS NOT NULL
-      ORDER BY created_at DESC
-    `;
+        const notices = await sql`
+         SELECT * FROM notice_board 
+         ORDER BY created_at DESC
+        `;
     return NextResponse.json(notices);
   } catch (error) {
     console.error('🔥 Error fetching notices:', error.message);

@@ -120,7 +120,6 @@ async function reconcileParents(tx, studentId, parents) {
 // ============================================================================
 
 export async function GET(request) {
-  // ✅ Verify token first
   const auth = verifyAdminToken(request);
   if (!auth.valid) {
     return NextResponse.json({ error: auth.error }, { status: 401 });
@@ -130,91 +129,26 @@ export async function GET(request) {
     const students = await sql`
       SELECT 
         s.admission_no, s.full_name, s.class_id, s.section, s.roll_no,
-        -- Assuming these columns exist on student_master, if not we will fix next
         s.student_phone, s.student_email,
-        s.guardian_name, s.guardian_phone, s.guardian_email,
         s.record_status, s.is_active,
-        c.class_name,
-        -- Fetch parent 1 (Assuming relationship_type = 'Father')
-        p1.full_name AS parent1_name, 
-        p1.phone AS parent1_phone, 
-        p1.email AS parent1_email,
-        -- Fetch parent 2 (Assuming relationship_type = 'Mother')
-        p2.full_name AS parent2_name, 
-        p2.phone AS parent2_phone, 
-        p2.email AS parent2_email
+        c.class_name
       FROM student_master s
-      LEFT JOIN parent_student_map psm1 ON s.student_id = psm1.student_id AND psm1.relationship_type = 'Father'
-      LEFT JOIN parent_master p1 ON psm1.parent_id = p1.parent_id
-      LEFT JOIN parent_student_map psm2 ON s.student_id = psm2.student_id AND psm2.relationship_type = 'Mother'
-      LEFT JOIN parent_master p2 ON psm2.parent_id = p2.parent_id
+      LEFT JOIN class_master c ON c.class_id = s.class_id
       WHERE s.record_status IS NOT NULL
       ORDER BY s.admission_no
     `;
-    return NextResponse.json(students);
-  } catch (error) {
-    // 🚨 LOG THE ACTUAL ERROR so it shows in PM2 logs
-    console.error('🔥 Database error in students API:', error.message);
-    // Return empty array to prevent frontend crash, but the log will tell us why
-    return NextResponse.json([], { status: 200 });
-  }
-}
-
-// ============================================================================
-// POST /api/students
-// ============================================================================
-
-export async function POST(request) {
-  const auth = verifyAdminToken(request);
-  if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
-
-  try {
-    const body = await request.json();
     
-    // 1. Insert the student
-    const studentResult = await sql`
-      INSERT INTO student_master (
-        admission_no, full_name, class_id, section, roll_no, 
-        student_phone, student_email, guardian_name, guardian_phone, guardian_email, 
-        record_status, is_active
-      ) VALUES (
-        ${body.admission_no}, ${body.full_name}, ${body.class_id}, ${body.section}, ${body.roll_no},
-        ${body.student_phone}, ${body.student_email}, ${body.guardian_name}, ${body.guardian_phone}, ${body.guardian_email},
-        'Active', true
-      ) RETURNING student_id
-    `;
-    const studentId = studentResult[0].student_id;
+    // Map empty parent fields so the frontend doesn't crash
+    const mappedStudents = students.map(s => ({
+      ...s,
+      parent1_name: '-', parent1_phone: '-', parent1_email: '-',
+      parent2_name: '-', parent2_phone: '-', parent2_email: '-'
+    }));
 
-    // 2. Insert Parent 1 (If provided)
-    if (body.parent1_name) {
-      const p1 = await sql`
-        INSERT INTO parent_master (full_name, phone, email)
-        VALUES (${body.parent1_name}, ${body.parent1_phone}, ${body.parent1_email})
-        RETURNING parent_id
-      `;
-      await sql`
-        INSERT INTO parent_student_map (parent_id, student_id, relationship_type)
-        VALUES (${p1[0].parent_id}, ${studentId}, 'Father')
-      `;
-    }
-
-    // 3. Insert Parent 2 (If provided)
-    if (body.parent2_name) {
-      const p2 = await sql`
-        INSERT INTO parent_master (full_name, phone, email)
-        VALUES (${body.parent2_name}, ${body.parent2_phone}, ${body.parent2_email})
-        RETURNING parent_id
-      `;
-      await sql`
-        INSERT INTO parent_student_map (parent_id, student_id, relationship_type)
-        VALUES (${p2[0].parent_id}, ${studentId}, 'Mother')
-      `;
-    }
-
-    return NextResponse.json({ success: true, message: "Student added successfully" });
+    return NextResponse.json(mappedStudents);
   } catch (error) {
-    console.error('🔥 Error adding student:', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('🔥 Database error in students API:', error.message);
+    return NextResponse.json([], { status: 200 });
   }
 }
 

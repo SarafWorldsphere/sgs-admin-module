@@ -138,16 +138,12 @@ export async function GET(request) {
     return NextResponse.json({ error: auth.error }, { status: 401 });
   }
   try {
-    const teachers = await sql`
-  SELECT 
-    t.*,
-    c.class_name,
-    c.section_name
-  FROM teacher_master t
-  LEFT JOIN teacher_class_subject_map m ON m.teacher_id = t.teacher_id
-  LEFT JOIN class_master c ON c.class_id = m.class_id
-  WHERE t.is_active = true
-`;
+      const teachers = await sql`
+        SELECT 
+          t.teacher_id, t.full_name, t.email, t.phone, t.is_active
+        FROM teacher_master t
+        ORDER BY t.teacher_id
+      `;
 
     // Fetch all map rows in one query — keyed by teacher_id
     const mapRows = await sql`
@@ -180,7 +176,7 @@ export async function GET(request) {
     }
 
     const normalized = teachers.map((t) => {
-      const tid = String(t.id);
+      const tid = String(t.teacher_id);
       const assignments = [];
 
       const grouped = byTeacher.get(tid);
