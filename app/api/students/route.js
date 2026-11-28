@@ -119,7 +119,7 @@ async function reconcileParents(tx, studentId, parents) {
 // GET /api/students
 // ============================================================================
 
-export async function GET() {
+export async function GET(request) {
     // ✅ Verify token first
   const auth = verifyAdminToken(request);
   if (!auth.valid) {
