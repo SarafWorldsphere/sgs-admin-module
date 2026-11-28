@@ -17,7 +17,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
-// 1. Update the props to accept the tenant object
 export default function AdminLayoutClient({
   children,
   tenant,
@@ -42,16 +41,16 @@ export default function AdminLayoutClient({
   const confirmLogout = () => {
     localStorage.clear();
     sessionStorage.clear();
-    // Dynamic logout redirect based on current host
     window.location.href = window.location.origin; 
   };
 
+  // FIX: Removed '/admin' from paths because basePath is already '/admin'
   const menuItems = [
-    { id: 'teachers', name: 'Teachers', icon: BookOpen, path: '/admin/teachers', color: 'from-green-500 to-emerald-500' },
-    { id: 'students', name: 'Students', icon: Users, path: '/admin/students', color: 'from-blue-500 to-cyan-500' },
-    { id: 'academic-setup', name: 'Academic Setup', icon: Calendar, path: '/admin/academic-setup', color: 'from-orange-500 to-amber-500' },
-    { id: 'syllabus-plan', name: 'Syllabus Plan', icon: ClipboardList, path: '/admin/syllabus-plan', color: 'from-indigo-500 to-blue-500' },
-    { id: 'others', name: 'Others', icon: Settings, path: '/admin/others', color: 'from-purple-500 to-pink-500' },
+    { id: 'teachers', name: 'Teachers', icon: BookOpen, path: '/teachers', color: 'from-green-500 to-emerald-500' },
+    { id: 'students', name: 'Students', icon: Users, path: '/students', color: 'from-blue-500 to-cyan-500' },
+    { id: 'academic-setup', name: 'Academic Setup', icon: Calendar, path: '/academic-setup', color: 'from-orange-500 to-amber-500' },
+    { id: 'syllabus-plan', name: 'Syllabus Plan', icon: ClipboardList, path: '/syllabus-plan', color: 'from-indigo-500 to-blue-500' },
+    { id: 'others', name: 'Others', icon: Settings, path: '/others', color: 'from-purple-500 to-pink-500' },
   ];
 
   const SidebarContent = ({ isMobile = false }) => {
@@ -67,7 +66,6 @@ export default function AdminLayoutClient({
                 className="flex flex-col items-center w-full"
               >
                 <div className="w-20 h-20 relative rounded-full overflow-hidden border-2 border-yellow-400/40 shadow-lg shadow-yellow-500/20 bg-white/5">
-                  {/* 2. DYNAMIC LOGO IN SIDEBAR */}
                   <Image
                     src={tenant.logo}
                     alt={`${tenant.name} Logo`}
@@ -77,7 +75,7 @@ export default function AdminLayoutClient({
                   />
                 </div>
                 <div className="text-center mt-2">
-                  {/* 3. DYNAMIC NAME IN SIDEBAR */}
+                  {/* DYNAMIC NAME HERE */}
                   <h1 className="text-white font-bold text-xl">{tenant.name}</h1>
                   <p className="text-white/40 text-[10px] uppercase tracking-wider">Admin Portal</p>
                 </div>
@@ -191,7 +189,6 @@ export default function AdminLayoutClient({
                     <span>👋</span>
                     <span className="truncate">Welcome, Admin!</span>
                   </h2>
-                  {/* 4. DYNAMIC NAME IN HEADER TEXT */}
                   <p className="text-white/50 text-xs sm:text-sm mt-0.5 hidden sm:block">
                     Here's what's happening with {tenant.name} today
                   </p>
@@ -200,7 +197,6 @@ export default function AdminLayoutClient({
 
               <div className="flex items-center gap-3 flex-shrink-0">
                 <div className="w-10 h-10 sm:w-12 sm:h-12 relative rounded-xl overflow-hidden border border-yellow-400/20">
-                  {/* 5. DYNAMIC LOGO IN HEADER */}
                   <Image src={tenant.logo} alt={`${tenant.name} Logo`} fill className="object-cover" />
                 </div>
                 <div className="text-right hidden sm:block">
