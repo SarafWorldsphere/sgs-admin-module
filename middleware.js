@@ -2,8 +2,23 @@ import { NextResponse } from 'next/server';
 
 export function middleware(request) {
   const { pathname, searchParams } = request.nextUrl;
-  
-  const loginPortalUrl = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL || 'https://staging.sgs.swais.in/login';
+
+  // Where to send someone who is not signed in.
+  //
+  // One deployment serves every school, and which school you are is decided
+  // by the host you arrived on. A hardcoded default therefore sends every
+  // school's admin to one particular school's portal: an admin signing in at
+  // sss-test was redirected onto sgs-test, crossing a tenant boundary on a
+  // fallback value.
+  //
+  // So: relative to the request, which returns the admin to the host they
+  // came from. The environment variable is still honoured for a deployment
+  // that genuinely serves the portal from somewhere else, but it is no
+  // longer required to prevent the wrong school being used.
+  const configuredPortal = process.env.NEXT_PUBLIC_LOGIN_PORTAL_URL;
+  const loginPortalUrl = configuredPortal
+    ? new URL(configuredPortal)
+    : new URL('/', request.url);
 
   // 1. If portal redirects with ?token=..., save it and clean URL
   const urlToken = searchParams.get('token');
