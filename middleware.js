@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 export function middleware(request) {
-  const { pathname, searchParams } = request.nextUrl;
+  const { searchParams } = request.nextUrl;
 
   // Where to send someone who is not signed in.
   //
@@ -20,10 +20,22 @@ export function middleware(request) {
     ? new URL(configuredPortal)
     : new URL('/', request.url);
 
-  // 1. If portal redirects with ?token=..., save it and clean URL
+  // 1. If portal redirects with ?token=..., save it and clean URL.
+  //
+  //    The clean URL is built from request.url, not from nextUrl.pathname.
+  //    This app runs under basePath '/admin', and nextUrl.pathname has that
+  //    prefix stripped — so redirecting to it sent an admin arriving at
+  //    /admin/student/dashboard on to /student/dashboard, which nginx routes
+  //    to the student module on another port. The admin never reached their
+  //    own dashboard and was bounced back to the portal.
+  //
+  //    Taking request.url keeps the basePath and any other query parameters,
+  //    and only the token is removed.
   const urlToken = searchParams.get('token');
   if (urlToken) {
-    const response = NextResponse.redirect(new URL(pathname, request.url));
+    const cleanUrl = new URL(request.url);
+    cleanUrl.searchParams.delete('token');
+    const response = NextResponse.redirect(cleanUrl);
     response.cookies.set('admin_token', urlToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
