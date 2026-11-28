@@ -1,7 +1,20 @@
 import { NextResponse } from 'next/server';
 
+// The endpoint the portal calls to obtain a token in the first place. It
+// cannot require one: guarding it meant the portal asked for a token, was
+// redirected to the login page, parsed that as a failure and sent the admin
+// on with no token — the loop this whole fix is about. It is not unguarded,
+// it authenticates differently: it checks the shared X-SSO-Secret itself.
+//
+// Compared against nextUrl.pathname, which has the '/admin' basePath removed.
+const PUBLIC_PATHS = new Set(['/api/auth/sso-token']);
+
 export function middleware(request) {
-  const { searchParams } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
+
+  if (PUBLIC_PATHS.has(pathname)) {
+    return NextResponse.next();
+  }
 
   // Where to send someone who is not signed in.
   //
