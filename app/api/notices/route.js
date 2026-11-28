@@ -61,7 +61,7 @@ export async function POST(request) {
     }
 
     const result = await sql`
-      INSERT INTO sgs_notice_board (
+      INSERT INTO notice_board (
         notice_title, notice_text, notice_date, applicable_class, record_status
       ) VALUES (
         ${title}, ${message}, ${date}, ${applicable_class || 'all'}, 'Active'
@@ -119,7 +119,7 @@ export async function DELETE(request) {
     const id = searchParams.get('id');
 
     const result = await sql`
-      UPDATE sgs_notice_board SET record_status = 'Deleted'
+      UPDATE notice_board SET record_status = 'Deleted'
       WHERE notice_id = ${id} RETURNING *
     `;
     if (result.length === 0) {

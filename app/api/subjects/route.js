@@ -17,7 +17,7 @@ export async function GET(request) {
       }
       rows = await sql`
         SELECT DISTINCT subject_name
-        FROM sgs_subject_master
+        FROM subject_master
         WHERE class_id = ${classId}
           AND (record_status IS NULL OR record_status = 'Active')
           AND subject_name IS NOT NULL
@@ -27,7 +27,7 @@ export async function GET(request) {
     } else {
       rows = await sql`
         SELECT DISTINCT subject_name
-        FROM sgs_subject_master
+        FROM subject_master
         WHERE (record_status IS NULL OR record_status = 'Active')
           AND subject_name IS NOT NULL
           AND subject_name != ''

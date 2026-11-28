@@ -16,12 +16,12 @@ const pool = new Pool({
 function getConfigFor(type) {
   switch (type) {
     case 'teacher':
-      return { prefix: 'T', tableName: 'sgs_teacher_master', idColumn: 'teacher_id' };
+      return { prefix: 'T', tableName: 'teacher_master', idColumn: 'teacher_id' };
     case 'headmaster':
-      return { prefix: 'H', tableName: 'sgs_teacher_master', idColumn: 'teacher_id' };
+      return { prefix: 'H', tableName: 'teacher_master', idColumn: 'teacher_id' };
     case 'student':
     default:
-      return { prefix: 'S', tableName: 'sgs_student_master', idColumn: 'admission_no' };
+      return { prefix: 'S', tableName: 'student_master', idColumn: 'admission_no' };
   }
 }
 

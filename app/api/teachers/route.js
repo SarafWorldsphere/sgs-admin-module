@@ -108,13 +108,13 @@ function normalizeClassMap(input) {
 
 async function replaceTeacherClassMap(tx, teacherId, rows) {
   await tx`
-    DELETE FROM sgs_teacher_class_map
+    DELETE FROM teacher_class_subject_map
     WHERE teacher_id = ${teacherId}
   `;
 
   for (const r of rows) {
     await tx`
-      INSERT INTO sgs_teacher_class_map
+      INSERT INTO teacher_class_subject_map
         (teacher_id, class_id, section, subject_name, is_class_teacher, record_status)
       VALUES
         (${teacherId}, ${r.class_id}, ${r.section}, ${r.subject_name}, ${r.is_class_teacher}, 'Active')
@@ -126,7 +126,7 @@ async function replaceTeacherClassMap(tx, teacherId, rows) {
 // GET /api/teachers
 // - Hides ONLY record_status = 'Deleted' (per Bhuvan).
 // - Includes aggregated "assignments" array per teacher, built from
-//   sgs_teacher_class_map. Falls back to a single assignment built from
+//   teacher_class_subject_map. Falls back to a single assignment built from
 //   teacher_master (class_id + section_1 + subjects) if the teacher has no
 //   map rows yet.
 // ============================================================================
@@ -155,7 +155,7 @@ export async function GET(request) {
         is_active,
         record_status,
         CASE WHEN is_active = true THEN 'Active' ELSE 'Inactive' END as status
-      FROM sgs_teacher_master
+      FROM teacher_master
       WHERE (record_status IS NULL OR record_status != 'Deleted')
       ORDER BY teacher_id
     `;
@@ -163,7 +163,7 @@ export async function GET(request) {
     // Fetch all map rows in one query — keyed by teacher_id
     const mapRows = await sql`
       SELECT teacher_id, class_id, section, subject_name, is_class_teacher
-      FROM sgs_teacher_class_map
+      FROM teacher_class_subject_map
       WHERE (record_status IS NULL OR record_status != 'Deleted')
       ORDER BY teacher_id, class_id, section, subject_name
     `;
@@ -273,7 +273,7 @@ export async function POST(request) {
     }
 
     const dupeId = await sql`
-      SELECT teacher_id FROM sgs_teacher_master WHERE teacher_id = ${teacher_id}
+      SELECT teacher_id FROM teacher_master WHERE teacher_id = ${teacher_id}
     `;
     if (dupeId.length > 0) {
       return NextResponse.json(
@@ -285,7 +285,7 @@ export async function POST(request) {
     if (email && String(email).trim()) {
       const dupeEmail = await sql`
         SELECT teacher_id, full_name
-        FROM sgs_teacher_master
+        FROM teacher_master
         WHERE LOWER(email_id) = LOWER(${String(email).trim()})
         LIMIT 1
       `;
@@ -308,7 +308,7 @@ export async function POST(request) {
     const classIdValue = toBigintOrNull(class_id);
     if (classIdValue !== null) {
       const classCheck = await sql`
-        SELECT class_id FROM sgs_class_master
+        SELECT class_id FROM class_master
         WHERE class_id = ${classIdValue} AND record_status = 'Active'
       `;
       if (classCheck.length === 0) {
@@ -324,7 +324,7 @@ export async function POST(request) {
 
     const result = await sql.begin(async (tx) => {
       const inserted = await tx`
-        INSERT INTO sgs_teacher_master (
+        INSERT INTO teacher_master (
           teacher_id, full_name, subject_name, qualification, class_id,
           section_1, section_2, role, is_class_teacher,
           subjects, phone, email_id, is_active, record_status
@@ -379,7 +379,7 @@ export async function PUT(request) {
     if (status !== undefined && !body.name) {
       const newStatus = status === 'Active';
       const result = await sql`
-        UPDATE sgs_teacher_master
+        UPDATE teacher_master
         SET is_active = ${newStatus}
         WHERE teacher_id = ${teacher_id}
         RETURNING *
@@ -408,7 +408,7 @@ export async function PUT(request) {
     if (email && String(email).trim()) {
       const dupeEmail = await sql`
         SELECT teacher_id, full_name
-        FROM sgs_teacher_master
+        FROM teacher_master
         WHERE LOWER(email_id) = LOWER(${String(email).trim()})
           AND teacher_id != ${teacher_id}
         LIMIT 1
@@ -432,7 +432,7 @@ export async function PUT(request) {
     const classIdValue = toBigintOrNull(class_id);
     if (classIdValue !== null) {
       const classCheck = await sql`
-        SELECT class_id FROM sgs_class_master
+        SELECT class_id FROM class_master
         WHERE class_id = ${classIdValue} AND record_status = 'Active'
       `;
       if (classCheck.length === 0) {
@@ -448,7 +448,7 @@ export async function PUT(request) {
 
     const result = await sql.begin(async (tx) => {
       const updated = await tx`
-        UPDATE sgs_teacher_master SET
+        UPDATE teacher_master SET
           full_name = ${name},
           subject_name = ${subject || null},
           qualification = ${qualification || null},
@@ -506,7 +506,7 @@ export async function DELETE(request) {
     const id = searchParams.get('id');
 
     const result = await sql`
-      UPDATE sgs_teacher_master
+      UPDATE teacher_master
       SET record_status = 'Deleted', is_active = false
       WHERE teacher_id = ${id}
       RETURNING *

@@ -16,7 +16,7 @@ export async function GET() {
         event_type as type,
         applicable_class,
         record_status as status
-      FROM sgs_events
+      FROM events
       WHERE record_status IN ('Active', 'Inactive')
       ORDER BY event_date DESC, event_id DESC
     `;
@@ -24,7 +24,7 @@ export async function GET() {
   } catch (error) {
     // Table might not exist yet — return empty instead of crashing
     if (error.code === '42P01') {
-      console.log('sgs_events table does not exist yet');
+      console.log('events table does not exist yet');
       return NextResponse.json([], { status: 200 });
     }
     console.error('Database error:', error);
@@ -43,7 +43,7 @@ export async function POST(request) {
 
     if (id) {
       const result = await sql`
-        UPDATE sgs_events
+        UPDATE events
         SET
           event_title = ${title},
           event_description = ${message},
@@ -60,7 +60,7 @@ export async function POST(request) {
     }
 
     const result = await sql`
-      INSERT INTO sgs_events (
+      INSERT INTO events (
         event_title, event_description, event_date, applicable_class, event_type, record_status
       ) VALUES (
         ${title}, ${message}, ${date}, ${applicable_class || 'all'}, ${type || 'event'}, 'Active'
@@ -96,7 +96,7 @@ export async function PUT(request) {
     }
 
     const result = await sql`
-      UPDATE sgs_events
+      UPDATE events
       SET record_status = ${status}
       WHERE event_id = ${id}
       RETURNING *
@@ -129,7 +129,7 @@ export async function DELETE(request) {
     const id = searchParams.get('id');
 
     const result = await sql`
-      UPDATE sgs_events SET record_status = 'Deleted'
+      UPDATE events SET record_status = 'Deleted'
       WHERE event_id = ${id} RETURNING *
     `;
     if (result.length === 0) {

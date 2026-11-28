@@ -12,7 +12,7 @@ export async function GET(request) {
 
     const users = await sql`
       SELECT user_id, username, email, role, school_id, is_active
-      FROM sgs_users_masters
+      FROM users_masters
       WHERE email = ${token.email} AND is_active = true
     `;
 

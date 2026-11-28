@@ -16,7 +16,7 @@ export async function GET(request) {
         class_id,
         class_name,
         section_name
-      FROM sgs_class_master
+      FROM class_master
       WHERE record_status = 'Active'
       ORDER BY class_id
     `;

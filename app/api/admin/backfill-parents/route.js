@@ -47,11 +47,11 @@ async function reconcileParents(tx, studentId, parents) {
   const parentRefs = [];
   for (const p of parents) {
     const rows = await tx`
-      INSERT INTO sgs_parent_master (full_name, email, phone, record_status, version_no)
+      INSERT INTO parent_master (full_name, email, phone, record_status, version_no)
       VALUES (${p.name}, ${p.email}, ${p.phone}, 'Active', 1)
       ON CONFLICT (email) DO UPDATE
         SET full_name = EXCLUDED.full_name,
-            phone = COALESCE(EXCLUDED.phone, sgs_parent_master.phone),
+            phone = COALESCE(EXCLUDED.phone, parent_master.phone),
             updated_at = CURRENT_TIMESTAMP
       RETURNING parent_id
     `;
@@ -63,20 +63,20 @@ async function reconcileParents(tx, studentId, parents) {
   if (parentRefs.length > 0) {
     const keepIds = parentRefs.map((r) => r.parent_id);
     await tx`
-      DELETE FROM sgs_parent_student_map
+      DELETE FROM parent_student_map
       WHERE student_id = ${studentId}
         AND parent_id NOT IN ${tx(keepIds)}
     `;
   } else {
     await tx`
-      DELETE FROM sgs_parent_student_map
+      DELETE FROM parent_student_map
       WHERE student_id = ${studentId}
     `;
   }
 
   for (const ref of parentRefs) {
     await tx`
-      INSERT INTO sgs_parent_student_map (parent_id, student_id, relationship_type)
+      INSERT INTO parent_student_map (parent_id, student_id, relationship_type)
       VALUES (${ref.parent_id}, ${studentId}, ${ref.relationship})
       ON CONFLICT (parent_id, student_id) DO UPDATE
         SET relationship_type = EXCLUDED.relationship_type
@@ -112,7 +112,7 @@ export async function POST(request) {
         parent1_name, parent1_email, parent1_phone,
         parent2_name, parent2_email, parent2_phone,
         guardian_name, guardian_email, guardian_phone
-      FROM sgs_student_master
+      FROM student_master
       WHERE record_status IN ('Active', 'Inactive')
       ORDER BY student_id
     `;

@@ -20,7 +20,7 @@ export async function GET() {
           WHERE (record_status IS NULL OR record_status != 'Deleted')
             AND (is_active = false OR is_active IS NULL)
         ) as inactive
-      FROM sgs_teacher_master
+      FROM teacher_master
     `;
     const stats = rows[0] || { total: 0, active: 0, inactive: 0 };
     return NextResponse.json({

@@ -30,7 +30,7 @@ export async function GET(request) {
     const periodRows = await sql`
       SELECT 
         period_no, period_label, start_time, end_time, is_teaching, schedule_type
-      FROM sgs_period_master
+      FROM period_master
       WHERE academic_year = ${academicYear}
         AND schedule_type = 'full'
         AND (record_status IS NULL OR record_status = 'Active')
@@ -51,7 +51,7 @@ export async function GET(request) {
         period_no,
         subject_name,
         teacher_id
-      FROM sgs_timetable
+      FROM timetable
       WHERE academic_year = ${academicYear}
         AND class_id = ${classId}
         AND section = ${section}
@@ -64,7 +64,7 @@ export async function GET(request) {
     if (teacherIds.length > 0) {
       const teacherRows = await sql`
         SELECT teacher_id, full_name
-        FROM sgs_teacher_master
+        FROM teacher_master
         WHERE teacher_id IN ${sql(teacherIds)}
       `;
       teacherNameById = new Map(teacherRows.map((t) => [t.teacher_id, t.full_name]));
@@ -229,8 +229,8 @@ export async function PUT(request) {
           t.class_id,
           t.section,
           c.class_name
-        FROM sgs_timetable t
-        LEFT JOIN sgs_class_master c ON c.class_id = t.class_id
+        FROM timetable t
+        LEFT JOIN class_master c ON c.class_id = t.class_id
         WHERE t.academic_year = ${year}
           AND (t.record_status IS NULL OR t.record_status = 'Active')
           AND t.teacher_id IN ${sql(teacherIds)}
@@ -277,7 +277,7 @@ export async function PUT(request) {
     // ---- Atomic write: replace all rows for this class-section-year ----
     await sql.begin(async (tx) => {
       await tx`
-        DELETE FROM sgs_timetable
+        DELETE FROM timetable
         WHERE academic_year = ${year}
           AND class_id = ${classId}
           AND section = ${sectionStr}
@@ -285,7 +285,7 @@ export async function PUT(request) {
 
       for (const s of normalizedSlots) {
         await tx`
-          INSERT INTO sgs_timetable (
+          INSERT INTO timetable (
             academic_year, class_id, section,
             day_of_week, period_no, subject_name, teacher_id,
             record_status

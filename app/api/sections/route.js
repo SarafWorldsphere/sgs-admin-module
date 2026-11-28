@@ -21,7 +21,7 @@ export async function GET(request) {
     // Bhuvan: "The only truthful source today is the students"
     const rows = await sql`
       SELECT DISTINCT section
-      FROM sgs_student_master
+      FROM student_master
       WHERE class_id = ${classId}
         AND section IS NOT NULL
         AND section != ''
@@ -38,7 +38,7 @@ export async function GET(request) {
     // Fallback: the class_master section_name (may be blank)
     const fallback = await sql`
       SELECT section_name
-      FROM sgs_class_master
+      FROM class_master
       WHERE class_id = ${classId}
         AND record_status = 'Active'
       LIMIT 1

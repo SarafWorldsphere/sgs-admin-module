@@ -21,7 +21,7 @@ export async function GET(request) {
         subject_name,
         is_class_teacher,
         record_status
-      FROM sgs_teacher_class_map
+      FROM teacher_class_subject_map
       WHERE teacher_id = ${teacherId}
         AND (record_status IS NULL OR record_status = 'Active')
       ORDER BY class_id, section, subject_name
